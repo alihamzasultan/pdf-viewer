@@ -255,7 +255,7 @@ else:
     with btn_col1:
         ext = st.session_state.current_url.split('.')[-1]
         st.download_button(
-            label="📥 Download",
+            label="Download",
             data=st.session_state.file_data,
             file_name=f"{clean_n}.{ext}",
             mime="application/octet-stream",
@@ -263,6 +263,6 @@ else:
         )
     
     with btn_col2:
-        if st.button("✖ Close", use_container_width=True):
+        if st.button("Close", use_container_width=True):
             st.session_state.file_data = None
             st.rerun()
