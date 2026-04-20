@@ -15,200 +15,186 @@ cloudinary.config(
 )
 
 ADMIN_PASSWORD = "Hello@123"
-FOLDER_NAME = "BCH-FILES"
+ROOT_FOLDER = "BCH-FILES"
 
 # --- 2. Page Config ---
-st.set_page_config(page_title="BCH Library Pro", layout="wide", initial_sidebar_state="expanded")
+st.set_page_config(page_title="BCH Cloud Explorer", layout="wide", initial_sidebar_state="expanded")
 
 def apply_pro_style():
     st.markdown("""
         <style>
-        /* Global App Styling */
         .stApp { background-color: #080A0C; }
         footer { visibility: hidden !important; }
         header { background-color: rgba(0,0,0,0) !important; }
+        [data-testid="stSidebar"] { background-color: #0E1117 !important; border-right: 1px solid rgba(255,255,255,0.05); }
         
-        /* Sidebar Professional Overhaul */
-        [data-testid="stSidebar"] {
-            background-color: #0E1117 !important;
-            border-right: 1px solid rgba(255,255,255,0.05);
-        }
+        .sidebar-heading { color: #555; font-size: 0.7rem; font-weight: 800; text-transform: uppercase; letter-spacing: 1.5px; margin: 15px 0 5px 0; }
         
-        .sidebar-heading {
-            color: #888;
-            font-size: 0.75rem;
-            font-weight: 700;
-            text-transform: uppercase;
-            letter-spacing: 1.5px;
-            margin-bottom: 10px;
-            margin-top: 20px;
-        }
-
-        /* Input Boxes */
-        .stTextInput input {
-            background-color: #1A1D24 !important;
-            border: 1px solid #2D323B !important;
-            color: #E6E6E6 !important;
-            border-radius: 6px !important;
-        }
-
-        /* Professional Buttons */
-        .stButton button {
-            border-radius: 6px !important;
-            border: 1px solid #2D323B !important;
-            background-color: #1A1D24 !important;
-            color: #E6E6E6 !important;
-            transition: all 0.2s ease;
-        }
-        
-        .stButton button:hover {
-            border-color: #4A90E2 !important;
-            color: #4A90E2 !important;
-            background-color: #1E2530 !important;
-        }
-
-        /* Active File Highlight */
-        button[key*="btn_active"] {
-            border-color: #4A90E2 !important;
-            color: #4A90E2 !important;
-        }
-
-        /* Delete Button - Red Hover */
-        button[key*="del_"]:hover {
-            border-color: #FF4B4B !important;
-            color: #FF4B4B !important;
-        }
+        /* Path Breadcrumb */
+        .path-display { color: #4A90E2; font-family: monospace; font-size: 0.8rem; background: #1A1D24; padding: 5px 10px; border-radius: 4px; margin-bottom: 10px; border: 1px solid #2D323B; }
 
         /* Media Viewport */
-        .media-box img, .media-box video {
-            border-radius: 8px;
-            box-shadow: 0 40px 100px rgba(0,0,0,0.8);
-            border: 1px solid rgba(255,255,255,0.05);
-            max-height: 85vh !important;
-            margin: 0 auto;
-            display: block;
-        }
-
-        /* Navigation Arrows */
-        button:has(div p:contains("〈")), button:has(div p:contains("〉")) {
-            width: 50px !important; height: 50px !important;
-            border-radius: 50% !important;
-            font-size: 24px !important;
-        }
+        .media-box img, .media-box video { border-radius: 8px; box-shadow: 0 40px 100px rgba(0,0,0,0.8); border: 1px solid rgba(255,255,255,0.05); max-height: 82vh !important; margin: 0 auto; display: block; }
+        
+        .stButton button { border-radius: 6px !important; transition: all 0.2s ease; }
+        
+        /* Folder vs File Colors */
+        button[key*="folder_"] { color: #F4D03F !important; text-align: left !important; }
+        button[key*="file_"] { color: #E6E6E6 !important; text-align: left !important; }
         </style>
     """, unsafe_allow_html=True)
 
 # --- 3. State Management ---
 if "authenticated" not in st.session_state: st.session_state.authenticated = False
-if "page_num" not in st.session_state: st.session_state.page_num = 0
+if "current_path" not in st.session_state: st.session_state.current_path = ROOT_FOLDER
 if "file_data" not in st.session_state: st.session_state.file_data = None
 if "current_filename" not in st.session_state: st.session_state.current_filename = ""
 if "current_type" not in st.session_state: st.session_state.current_type = ""
+if "page_num" not in st.session_state: st.session_state.page_num = 0
 
-# --- 4. Logic Functions ---
-def get_resource_type(filename):
-    ext = filename.split('.')[-1].lower()
-    if ext in ['jpg', 'jpeg', 'png', 'webp']: return "image"
-    if ext in ['mp4', 'mov', 'avi']: return "video"
-    return "raw"
+# --- 4. Cloudinary Engine ---
 
-def upload_file(file_bytes, filename):
-    r_type = get_resource_type(filename)
-    resp = cloudinary.uploader.upload(file_bytes, folder=FOLDER_NAME, public_id=filename.split('.')[0], resource_type=r_type, overwrite=True)
-    return resp['secure_url'], r_type
-
-def delete_file(public_id, r_type):
-    cloudinary.uploader.destroy(public_id, resource_type=r_type)
-    return True
-
-def fetch_files():
+def get_items_in_path(path):
+    """Fetches both subfolders and files for the given path."""
+    folders = []
     files = []
     try:
+        # 1. Get Subfolders
+        sub_folders_res = cloudinary.api.sub_folders(path)
+        folders = [folder['name'] for folder in sub_folders_res.get('folders', [])]
+        
+        # 2. Get Files
         for rt in ['image', 'video', 'raw']:
-            res = cloudinary.api.resources(resource_type=rt, type="upload", prefix=f"{FOLDER_NAME}/", max_results=100)
+            res = cloudinary.api.resources(resource_type=rt, type="upload", prefix=path + "/", max_results=100)
             for item in res.get('resources', []):
-                item['r_type'] = rt
-                item['display_name'] = item['public_id'].replace(f"{FOLDER_NAME}/", "")
-                files.append(item)
-    except: pass
-    return files
+                # Ensure we only get files directly in this folder, not deeper ones
+                # Cloudinary prefix search is recursive, so we filter by '/' count
+                if item['public_id'].count('/') == path.count('/') + 1:
+                    item['r_type'] = rt
+                    item['display_name'] = item['public_id'].split('/')[-1]
+                    files.append(item)
+    except Exception as e:
+        st.error(f"Sync Error: {e}")
+    return sorted(folders), sorted(files, key=lambda x: x['display_name'])
+
+def perform_upload(file_bytes, custom_name, folder_path):
+    ext = custom_name.split('.')[-1].lower()
+    r_type = "image" if ext in ['jpg', 'jpeg', 'png', 'webp'] else "video" if ext in ['mp4', 'mov'] else "raw"
+    
+    # We strip the extension for the public_id as Cloudinary adds it automatically for images/videos
+    clean_id = custom_name.rsplit('.', 1)[0]
+    
+    resp = cloudinary.uploader.upload(
+        file_bytes, 
+        folder=folder_path, 
+        public_id=clean_id, 
+        resource_type=r_type, 
+        overwrite=True
+    )
+    return resp['secure_url'], r_type
 
 # --- 5. Sidebar UI ---
 with st.sidebar:
-    st.markdown('<p class="sidebar-heading">Security</p>', unsafe_allow_html=True)
-    pwd_input = st.text_input("Password", type="password", placeholder="Enter Admin Password", label_visibility="collapsed")
+    st.markdown("### 🛡️ Security")
+    pwd = st.text_input("Admin Password", type="password", placeholder="Password", label_visibility="collapsed")
     if st.button("Unlock Admin Mode", use_container_width=True):
-        if pwd_input == ADMIN_PASSWORD:
+        if pwd == ADMIN_PASSWORD:
             st.session_state.authenticated = True
-            st.toast("Admin mode unlocked", icon="🔓")
+            st.toast("Authenticated!", icon="🔓")
         else:
             st.session_state.authenticated = False
-            st.error("Invalid Password")
+            st.error("Access Denied")
+
+    st.markdown('<p class="sidebar-heading">Location</p>', unsafe_allow_html=True)
+    st.markdown(f'<div class="path-display">📂 {st.session_state.current_path}</div>', unsafe_allow_html=True)
     
-    if st.session_state.authenticated:
-        st.caption("✅ Admin Authorized")
+    # Navigation Buttons
+    c_back, c_home = st.columns(2)
+    with c_back:
+        if st.button("⬅️ Back", use_container_width=True):
+            if st.session_state.current_path != ROOT_FOLDER:
+                st.session_state.current_path = st.session_state.current_path.rsplit('/', 1)[0]
+                st.rerun()
+    with c_home:
+        if st.button("🏠 Home", use_container_width=True):
+            st.session_state.current_path = ROOT_FOLDER
+            st.rerun()
 
     st.markdown('<p class="sidebar-heading">Explorer</p>', unsafe_allow_html=True)
-    search = st.text_input("Search", placeholder="🔍 Search folder...", label_visibility="collapsed").lower()
-    
-    st.markdown('<p class="sidebar-heading">BCH-FILES Library</p>', unsafe_allow_html=True)
-    lib_files = fetch_files()
-    
-    for f in lib_files:
+    folders, files = get_items_in_path(st.session_state.current_path)
+
+    # Display Folders
+    for f in folders:
+        if st.button(f"📁 {f}", key=f"folder_{f}", use_container_width=True):
+            st.session_state.current_path += f"/{f}"
+            st.rerun()
+
+    # Display Files
+    for f in files:
         pid = f['public_id']
         name = f['display_name']
-        if search in name.lower():
-            c1, c2 = st.columns([4, 1])
-            with c1:
-                is_active = pid == st.session_state.current_filename
-                btn_key = f"btn_active_{pid}" if is_active else f"btn_{pid}"
-                icon = "▶️" if is_active else "📄"
-                if st.button(f"{icon} {name}", key=btn_key, use_container_width=True):
-                    with st.spinner(""):
-                        resp = requests.get(f['secure_url'])
-                        st.session_state.file_data = resp.content
-                        st.session_state.current_filename = pid
-                        st.session_state.current_type = f['r_type']
-                        st.session_state.current_url = f['secure_url']
-                        st.session_state.page_num = 0
-                        st.rerun()
-            with c2:
-                if st.session_state.authenticated:
-                    if st.button("🗑️", key=f"del_{pid}", help="Delete from cloud"):
-                        if delete_file(pid, f['r_type']):
-                            if st.session_state.current_filename == pid:
-                                st.session_state.file_data = None
-                            st.rerun()
+        col_f, col_d = st.columns([4, 1])
+        with col_f:
+            icon = "▶️" if pid == st.session_state.current_filename else "📄"
+            if st.button(f"{icon} {name}", key=f"file_{pid}", use_container_width=True):
+                with st.spinner(""):
+                    resp = requests.get(f['secure_url'])
+                    st.session_state.file_data = resp.content
+                    st.session_state.current_filename = pid
+                    st.session_state.current_type = f['r_type']
+                    st.session_state.current_url = f['secure_url']
+                    st.session_state.page_num = 0
+                    st.rerun()
+        with col_d:
+            if st.session_state.authenticated:
+                if st.button("🗑️", key=f"del_{pid}"):
+                    cloudinary.uploader.destroy(pid, resource_type=f['r_type'])
+                    if st.session_state.current_filename == pid: st.session_state.file_data = None
+                    st.rerun()
 
-# --- 6. Main Area ---
+# --- 6. Main Content Area ---
 apply_pro_style()
 
 if st.session_state.file_data is None:
-    st.markdown("<div style='height: 25vh;'></div>", unsafe_allow_html=True)
+    st.markdown("<div style='height: 15vh;'></div>", unsafe_allow_html=True)
     _, mid, _ = st.columns([1, 2, 1])
     with mid:
-        st.title("BCH Media Vault")
-        st.markdown("Select a file from the sidebar or upload a new one.")
+        st.title("BCH Cloud Vault")
+        st.caption(f"Current Directory: {st.session_state.current_path}")
+        
         if st.session_state.authenticated:
-            up = st.file_uploader("Drop file here", type=["pdf", "png", "jpg", "mp4"])
-            if up:
-                with st.spinner("Processing..."):
-                    b = up.read()
-                    url, rt = upload_file(b, up.name)
-                    st.session_state.file_data = b
-                    st.session_state.current_filename = f"{FOLDER_NAME}/{up.name.split('.')[0]}"
-                    st.session_state.current_type = rt
-                    st.session_state.current_url = url
+            with st.expander("➕ New Folder"):
+                new_f = st.text_input("Folder Name", placeholder="e.g. Invoices")
+                if st.button("Create Virtual Folder"):
+                    # Cloudinary folders only exist with files, so we navigate into a virtual path
+                    st.session_state.current_path += f"/{new_f}"
                     st.rerun()
+
+            with st.expander("📤 Upload File"):
+                up_name = st.text_input("File Display Name", placeholder="e.g. Q4_Report")
+                up_file = st.file_uploader("Choose File", type=["pdf", "png", "jpg", "mp4"])
+                if st.button("Confirm Upload") and up_file and up_name:
+                    # Maintain extension
+                    ext = up_file.name.split('.')[-1]
+                    full_name = f"{up_name}.{ext}"
+                    with st.spinner("Uploading to Cloud..."):
+                        b = up_file.read()
+                        url, rt = perform_upload(b, full_name, st.session_state.current_path)
+                        st.session_state.file_data = b
+                        st.session_state.current_filename = f"{st.session_state.current_path}/{up_name}"
+                        st.session_state.current_type = rt
+                        st.session_state.current_url = url
+                        st.rerun()
         else:
-            st.info("💡 Enter the admin password in the sidebar to enable uploads.")
+            st.info("🔒 Enter Admin Password in sidebar to manage folders and files.")
+
 else:
-    # Title display
+    # Viewer Header
     clean_n = st.session_state.current_filename.split('/')[-1]
     st.markdown(f"<div style='text-align:center; color:#555; letter-spacing:5px; font-size:11px; margin: 15px 0;'>{clean_n.upper()}</div>", unsafe_allow_html=True)
 
-    # Viewer
-    if st.session_state.current_type == "raw": # PDF
+    # PDF Logic
+    if st.session_state.current_type == "raw":
         doc = fitz.open(stream=st.session_state.file_data, filetype="pdf")
         st.session_state.total_pages = len(doc)
         page = doc.load_page(st.session_state.page_num)
@@ -228,12 +214,16 @@ else:
                 st.rerun()
     
     elif st.session_state.current_type == "image":
+        st.markdown('<div class="media-box">', unsafe_allow_html=True)
         st.image(st.session_state.file_data, use_container_width=True)
+        st.markdown('</div>', unsafe_allow_html=True)
     
     elif st.session_state.current_type == "video":
+        st.markdown('<div class="media-box">', unsafe_allow_html=True)
         st.video(st.session_state.current_url)
+        st.markdown('</div>', unsafe_allow_html=True)
 
-    # Exit
+    # Bottom Close
     st.markdown("<br>", unsafe_allow_html=True)
     _, ex, _ = st.columns([6, 2, 6])
     if ex.button("✖ Close Viewer", use_container_width=True):
