@@ -237,13 +237,34 @@ else:
         st.video(st.session_state.current_url)
         st.markdown('</div>', unsafe_allow_html=True)
 
-    # DOWNLOAD & CLOSE
+# --- 7. Download & Close ---
     st.markdown("<br>", unsafe_allow_html=True)
     _, d_col, c_col, _ = st.columns([5, 2, 2, 5])
+    
+    # Prepare filename and extension
+    # Extract the base name (remove folder path)
+    base_display_name = st.session_state.current_filename.split('/')[-1]
+    
+    # Get the extension (Cloudinary usually provides 'format', otherwise we grab from URL)
+    extension = st.session_state.current_format.lower()
+    
+    # Ensure the extension isn't duplicated (e.g., if the user typed "file.pdf" as name)
+    if base_display_name.lower().endswith(f".{extension}"):
+        full_download_name = base_display_name
+    else:
+        full_download_name = f"{base_display_name}.{extension}"
+
     with d_col:
-        # We use st.session_state.current_format to ensure the download has the correct extension
-        pass
+        st.download_button(
+            label="Download",
+            data=st.session_state.file_data,
+            file_name=full_download_name,
+            mime=None, # Streamlit will automatically guess MIME type from filename extension
+            use_container_width=True
+        )
+        
     with c_col:
         if st.button("Close", use_container_width=True):
             st.session_state.file_data = None
+            st.session_state.current_filename = ""
             st.rerun()
