@@ -29,7 +29,7 @@ def apply_pro_style():
         header { background-color: rgba(0,0,0,0) !important; }
         [data-testid="stSidebar"] { background-color: #0E1117 !important; border-right: 1px solid rgba(255,255,255,0.05); }
         
-        /* Breadcrumb Sidebar */
+        /* Friendly Breadcrumb */
         .breadcrumb-container {
             display: flex; align-items: center; padding: 12px;
             background: rgba(255,255,255,0.03); border: 1px solid rgba(255,255,255,0.08);
@@ -40,25 +40,18 @@ def apply_pro_style():
         .stButton button { border-radius: 8px !important; background-color: #1E2127 !important; border: 1px solid #2D3139 !important; color: #E0E0E0 !important; }
         .stButton button:hover { border-color: #4A90E2 !important; color: #4A90E2 !important; }
         
+        /* Trash Icon */
         button[key*="del_"] { color: #555 !important; border: none !important; background: transparent !important; }
         button[key*="del_"]:hover { color: #FF4B4B !important; background: rgba(255,75,75,0.1) !important; }
 
-        /* --- MEDIA VIEWPORT CONTAINMENT --- */
-        .media-container {
-            display: flex;
-            justify-content: center;
-            align-items: center;
-            width: 100%;
-            height: calc(85vh - 60px); /* Strict height limit */
-            margin: 0 auto;
-            overflow: hidden;
+        /* --- MEDIA VIEWPORT FIX --- */
+        .viewport-wrapper {
+            display: flex; justify-content: center; align-items: center;
+            width: 100%; height: 75vh; overflow: hidden; margin-top: 10px;
         }
-
-        .media-container img, .media-container video {
-            max-width: 100% !important;
-            max-height: 100% !important;
-            object-fit: contain !important; /* Ensures the whole image/video is visible */
-            border-radius: 8px;
+        .viewport-wrapper img, .viewport-wrapper video {
+            max-width: 100% !important; max-height: 100% !important;
+            object-fit: contain !important; border-radius: 8px;
             box-shadow: 0 40px 100px rgba(0,0,0,0.8);
             border: 1px solid rgba(255,255,255,0.05);
         }
@@ -77,27 +70,35 @@ if "current_type" not in st.session_state: st.session_state.current_type = ""
 if "page_num" not in st.session_state: st.session_state.page_num = 0
 if "virtual_folders" not in st.session_state: st.session_state.virtual_folders = set()
 
-# --- 4. Cloudinary Engine ---
+# --- 4. Robust Sync Engine ---
 
 def get_items_in_path(path):
     folders, files = set(), []
+    
+    # Add Virtual Folders
     for vf in st.session_state.virtual_folders:
-        if vf.rsplit('/', 1)[0] == path: folders.add(vf.split('/')[-1])
+        if vf.rsplit('/', 1)[0] == path:
+            folders.add(vf.split('/')[-1])
 
+    # Fetch Actual Folders
     try:
         sub_folders_res = cloudinary.api.subfolders(path)
-        for folder in sub_folders_res.get('folders', []): folders.add(folder['name'])
+        for f in sub_folders_res.get('folders', []): folders.add(f['name'])
     except: pass
 
+    # Fetch Actual Files (Checking all 3 types)
     try:
         for rt in ['image', 'video', 'raw']:
             res = cloudinary.api.resources(resource_type=rt, type="upload", prefix=path + "/", max_results=100)
             for item in res.get('resources', []):
-                if item['public_id'].rsplit('/', 1)[0] == path:
+                # FIXED: Strong path normalization to ensure files in subfolders show correctly
+                item_parent = item['public_id'].rsplit('/', 1)[0]
+                if item_parent == path:
                     item['r_type'] = rt
                     item['display_name'] = item['public_id'].split('/')[-1]
                     files.append(item)
     except: pass
+    
     return sorted(list(folders)), sorted(files, key=lambda x: x['display_name'])
 
 def delete_folder_recursive(path):
@@ -107,7 +108,7 @@ def delete_folder_recursive(path):
             except: pass
         try: cloudinary.api.delete_folder(path)
         except: pass
-        if path in st.session_state.virtual_folders: st.session_state.virtual_folders.remove(path)
+        st.session_state.virtual_folders.discard(path)
         return True
     except: return False
 
@@ -129,9 +130,9 @@ with st.sidebar:
         else: st.error("Access Denied")
 
     st.markdown('<p class="sidebar-heading">Location</p>', unsafe_allow_html=True)
-    path_parts = st.session_state.current_path.split('/')
-    friendly_path = "Home" if len(path_parts) == 1 else "Home > " + " > ".join(path_parts[1:])
-    st.markdown(f'<div class="breadcrumb-container"><span style="color:#4A90E2; font-size:0.85rem; font-weight:600;">📂 {friendly_path}</span></div>', unsafe_allow_html=True)
+    parts = st.session_state.current_path.split('/')
+    friendly = "Home" if len(parts) == 1 else "Home > " + " > ".join(parts[1:])
+    st.markdown(f'<div class="breadcrumb-container"><span style="color:#4A90E2; font-size:0.85rem; font-weight:600;">📂 {friendly}</span></div>', unsafe_allow_html=True)
     
     c1, c2 = st.columns(2)
     with c1:
@@ -166,13 +167,14 @@ with st.sidebar:
             active = pid == st.session_state.current_filename
             icon = "▶️" if active else "📄"
             if st.button(f"{icon} {name}", key=f"file_{pid}", use_container_width=True):
-                resp = requests.get(f['secure_url'])
-                st.session_state.file_data = resp.content
-                st.session_state.current_filename = pid
-                st.session_state.current_type = f['r_type']
-                st.session_state.current_url = f['secure_url']
-                st.session_state.page_num = 0
-                st.rerun()
+                with st.spinner(""):
+                    resp = requests.get(f['secure_url'])
+                    st.session_state.file_data = resp.content
+                    st.session_state.current_filename = pid
+                    st.session_state.current_type = f['r_type']
+                    st.session_state.current_url = f['secure_url']
+                    st.session_state.page_num = 0
+                    st.rerun()
         with df:
             if st.session_state.authenticated:
                 if st.button("🗑️", key=f"del_file_{pid}"):
@@ -188,36 +190,37 @@ if st.session_state.file_data is None:
     _, mid, _ = st.columns([1, 2, 1])
     with mid:
         curr_name = st.session_state.current_path.split('/')[-1]
-        display_name = "Root Library" if curr_name == ROOT_FOLDER else curr_name
-        st.markdown(f'<div class="welcome-banner">📂 You are in <b>{display_name}</b> now.<br>{"This folder is empty. Upload below!" if not files and not folders else "Manage your content below."}</div>', unsafe_allow_html=True)
+        display = "Root Library" if curr_name == ROOT_FOLDER else curr_name
+        st.markdown(f'<div class="welcome-banner">📁 You are in <b>{display}</b> now.<br>{"Folder is empty. Upload below!" if not files and not folders else "Manage your files below."}</div>', unsafe_allow_html=True)
         
         if st.session_state.authenticated:
             if st.session_state.current_path == ROOT_FOLDER:
                 with st.expander("📁 Create New Sub-folder"):
                     nf = st.text_input("Folder Name")
                     if st.button("Create"):
-                        st.session_state.virtual_folders.add(f"{ROOT_FOLDER}/{nf}")
-                        st.session_state.current_path = f"{ROOT_FOLDER}/{nf}"
+                        new_p = f"{ROOT_FOLDER}/{nf}"
+                        st.session_state.virtual_folders.add(new_p)
+                        st.session_state.current_path = new_p
                         st.rerun()
             with st.expander("📤 Upload Media"):
                 un = st.text_input("Display Name")
                 uf = st.file_uploader("Select File", type=["pdf", "png", "jpg", "mp4"])
-                if st.button("Upload") and uf and un:
+                if st.button("Confirm Upload") and uf and un:
                     with st.spinner("Uploading..."):
                         url, rt = perform_upload(uf.read(), f"{un}.{uf.name.split('.')[-1]}", st.session_state.current_path)
+                        st.session_state.file_data = requests.get(url).content
                         st.session_state.current_filename = f"{st.session_state.current_path}/{un}"
                         st.session_state.current_type = rt
                         st.session_state.current_url = url
-                        st.session_state.file_data = requests.get(url).content
                         st.rerun()
         else: st.info("🔐 Unlock Admin Mode in the sidebar to enable controls.")
 
 else:
-    # FILENAME DISPLAY
+    # FILENAME
     clean_n = st.session_state.current_filename.split('/')[-1]
     st.markdown(f"<div style='text-align:center; color:#555; letter-spacing:5px; font-size:11px; margin: 15px 0;'>{clean_n.upper()}</div>", unsafe_allow_html=True)
 
-    # --- RENDERER ---
+    # RENDERER
     if st.session_state.current_type == "raw": # PDF
         doc = fitz.open(stream=st.session_state.file_data, filetype="pdf")
         st.session_state.total_pages = len(doc)
@@ -229,8 +232,8 @@ else:
                 st.session_state.page_num -= 1
                 st.rerun()
         with main:
-            st.markdown('<div class="media-container">', unsafe_allow_html=True)
-            st.image(pix.tobytes("png"), use_container_width=False) # container width False helps manual CSS control
+            st.markdown('<div class="viewport-wrapper">', unsafe_allow_html=True)
+            st.image(pix.tobytes("png"))
             st.markdown('</div>', unsafe_allow_html=True)
             st.markdown(f"<div style='text-align:center; color:#444; font-size:12px; margin-top:10px;'>{st.session_state.page_num+1} / {st.session_state.total_pages}</div>", unsafe_allow_html=True)
         with n2:
@@ -239,30 +242,22 @@ else:
                 st.rerun()
     
     elif st.session_state.current_type == "image":
-        st.markdown('<div class="media-container">', unsafe_allow_html=True)
+        st.markdown('<div class="viewport-wrapper">', unsafe_allow_html=True)
         st.image(st.session_state.file_data)
         st.markdown('</div>', unsafe_allow_html=True)
     
     elif st.session_state.current_type == "video":
-        st.markdown('<div class="media-container">', unsafe_allow_html=True)
+        st.markdown('<div class="viewport-wrapper">', unsafe_allow_html=True)
         st.video(st.session_state.current_url)
         st.markdown('</div>', unsafe_allow_html=True)
 
-    # --- ACTION BUTTONS ---
+    # ACTIONS
     st.markdown("<br>", unsafe_allow_html=True)
-    _, btn_col1, btn_col2, _ = st.columns([5, 2, 2, 5])
-    
-    with btn_col1:
+    _, d_col, c_col, _ = st.columns([5, 2, 2, 5])
+    with d_col:
         ext = st.session_state.current_url.split('.')[-1]
-        st.download_button(
-            label="Download",
-            data=st.session_state.file_data,
-            file_name=f"{clean_n}.{ext}",
-            mime="application/octet-stream",
-            use_container_width=True
-        )
-    
-    with btn_col2:
-        if st.button("Close", use_container_width=True):
+        st.download_button("📥 Download", st.session_state.file_data, f"{clean_n}.{ext}", use_container_width=True)
+    with c_col:
+        if st.button("✖ Close", use_container_width=True):
             st.session_state.file_data = None
             st.rerun()
