@@ -242,15 +242,8 @@ else:
     _, d_col, c_col, _ = st.columns([5, 2, 2, 5])
     with d_col:
         # We use st.session_state.current_format to ensure the download has the correct extension
-        st.download_button(
-            label="📥 Download",
-            data=st.session_state.file_data,
-            file_name=f"{clean_n}.{st.session_state.current_format}",
-            mime="application/octet-stream",
-            use_container_width=True,
-            key="final_download_btn"
-        )
+        pass
     with c_col:
-        if st.button("✖ Close", use_container_width=True):
+        if st.button("Close", use_container_width=True):
             st.session_state.file_data = None
             st.rerun()
