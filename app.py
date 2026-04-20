@@ -15,7 +15,6 @@ cloudinary.config(
 )
 
 # --- 2. Page Config ---
-# Changed to 'expanded' so it's always there on first load
 st.set_page_config(page_title="Pro PDF Viewer", layout="wide", initial_sidebar_state="expanded")
 
 def apply_pro_style():
@@ -24,17 +23,16 @@ def apply_pro_style():
         /* Global Background */
         .stApp { background-color: #080a0c; }
         
-        /* Hide Footer and 'Made with Streamlit' Menu but KEEP the Sidebar Toggle */
+        /* Hide default menus but keep toggle */
         footer { visibility: hidden !important; }
         #MainMenu { visibility: hidden !important; }
         header { background-color: rgba(0,0,0,0) !important; }
 
-        /* Make Sidebar Toggle Button Visible and Professional */
+        /* Sidebar Toggle Button */
         [data-testid="stSidebarCollapseButton"] {
             background-color: rgba(255,255,255,0.05) !important;
             border-radius: 8px !important;
             color: white !important;
-            margin-left: 10px !important;
         }
 
         [data-testid="block-container"] { padding: 1rem 2rem !important; max-width: 100% !important; }
@@ -43,7 +41,13 @@ def apply_pro_style():
         section[data-testid="stSidebar"] {
             background-color: #0e1116 !important;
             border-right: 1px solid rgba(255,255,255,0.05);
-            width: 300px !important;
+        }
+
+        /* Search Box Styling */
+        div[data-testid="stTextInput"] input {
+            background-color: #1a1d23 !important;
+            color: white !important;
+            border: 1px solid rgba(255,255,255,0.1) !important;
         }
 
         /* Slide Image */
@@ -83,7 +87,6 @@ def apply_pro_style():
             color: #888 !important;
             border-radius: 20px !important;
             text-transform: uppercase;
-            letter-spacing: 1px;
         }
         
         button:has(div p:contains("Exit Viewer")):hover {
@@ -125,7 +128,7 @@ def upload_to_cloudinary(file_bytes, filename):
 
 def get_cloudinary_files():
     try:
-        resources = cloudinary.api.resources(resource_type="raw")
+        resources = cloudinary.api.resources(resource_type="raw", max_results=100)
         return resources.get('resources', [])
     except: return []
 
@@ -135,30 +138,46 @@ def rename_cloudinary_file(old_id, new_id):
         return True
     except: return False
 
-# --- 5. Sidebar (Controls) ---
+# --- 5. Sidebar with Search ---
 with st.sidebar:
-    st.title("📂 Cloud Library")
-    st.caption("Select a file or upload a new one below")
-    st.markdown("---")
+    st.title("📂 PDF Library")
     
-    files = get_cloudinary_files()
-    if not files:
-        st.info("No files in cloud.")
+    # --- Search Box ---
+    search_query = st.text_input("🔍 Search files...", "").strip().lower()
+    
+    st.markdown("<br>", unsafe_allow_html=True)
+    
+    # Get and filter files
+    all_files = get_cloudinary_files()
+    if not all_files:
+        st.info("Cloud library is empty.")
     else:
-        for f in files:
-            if st.button(f"📄 {f['public_id']}", key=f['public_id'], use_container_width=True):
-                with st.spinner("Downloading..."):
-                    resp = requests.get(f['secure_url'])
-                    st.session_state.file_data = resp.content
-                    st.session_state.current_filename = f['public_id']
-                    st.session_state.page_num = 0
-                    st.rerun()
+        # Filter logic based on search box
+        filtered_files = [f for f in all_files if search_query in f['public_id'].lower()]
+        
+        if not filtered_files:
+            st.warning("No matches found.")
+        else:
+            for f in filtered_files:
+                # Highlight active file button with a special icon
+                btn_label = f"📄 {f['public_id']}"
+                if f['public_id'] == st.session_state.current_filename:
+                    btn_label = f"▶️ {f['public_id']}"
+                
+                if st.button(btn_label, key=f['public_id'], use_container_width=True):
+                    with st.spinner("Syncing..."):
+                        resp = requests.get(f['secure_url'])
+                        st.session_state.file_data = resp.content
+                        st.session_state.current_filename = f['public_id']
+                        st.session_state.page_num = 0
+                        st.rerun()
     
+    # --- Rename Section (only if file selected) ---
     if st.session_state.current_filename:
         st.markdown("---")
-        st.subheader("Manage File")
-        new_name = st.text_input("Rename to", value=st.session_state.current_filename)
-        if st.button("Save Name"):
+        st.subheader("Settings")
+        new_name = st.text_input("Rename Current File", value=st.session_state.current_filename)
+        if st.button("Apply Rename"):
             if rename_cloudinary_file(st.session_state.current_filename, new_name):
                 st.session_state.current_filename = new_name
                 st.rerun()
@@ -167,14 +186,15 @@ with st.sidebar:
 apply_pro_style()
 
 if st.session_state.file_data is None:
+    # Landing Screen
     st.markdown("<div style='height: 20vh;'></div>", unsafe_allow_html=True)
     c1, c2, c3 = st.columns([1, 2, 1])
     with c2:
         st.title("Pro PDF Viewer")
-        st.markdown("Upload a PDF to start viewing. Existing files are in the **Sidebar Library** (left).")
+        st.markdown("Upload a new PDF below or search your library in the sidebar.")
         uploaded_file = st.file_uploader("Upload PDF", type=["pdf"])
         if uploaded_file:
-            with st.spinner("Uploading to Cloudinary..."):
+            with st.spinner("Processing..."):
                 file_bytes = uploaded_file.read()
                 if upload_to_cloudinary(file_bytes, uploaded_file.name):
                     st.session_state.file_data = file_bytes
@@ -182,7 +202,7 @@ if st.session_state.file_data is None:
                     st.rerun()
 else:
     # FILENAME OVERLAY
-    st.markdown(f"<div style='text-align:center; color:rgba(255,255,255,0.2); letter-spacing:5px; font-size:10px; margin-bottom:10px;'>{st.session_state.current_filename.upper()}</div>", unsafe_allow_html=True)
+    st.markdown(f"<div style='text-align:center; color:rgba(255,255,255,0.2); letter-spacing:5px; font-size:10px; margin-bottom:10px;'>VIEWING: {st.session_state.current_filename.upper()}</div>", unsafe_allow_html=True)
 
     try:
         doc = fitz.open(stream=st.session_state.file_data, filetype="pdf")
@@ -200,7 +220,7 @@ else:
 
         with main_area:
             st.image(pix.tobytes("png"), use_container_width=True)
-            st.markdown(f"<div class='page-info'>PAGE {st.session_state.page_num + 1} / {st.session_state.total_pages}</div>", unsafe_allow_html=True)
+            st.markdown(f"<div class='page-info'>{st.session_state.page_num + 1} / {st.session_state.total_pages}</div>", unsafe_allow_html=True)
 
         with nav_next:
             if st.button("〉", key="next") and st.session_state.page_num < st.session_state.total_pages - 1:
@@ -215,10 +235,10 @@ else:
                 st.rerun()
 
     except Exception as e:
-        st.error(f"Error: {e}")
+        st.error(f"Render Error: {e}")
         if st.button("Back"): reset_state()
 
-    # JS for Keyboard Arrows
+    # Keyboard Controls
     st.components.v1.html("""
         <script>
         const doc = window.parent.document;
