@@ -1,3 +1,4 @@
 streamlit
 pymupdf
 cloudinary
+aspose-slides
