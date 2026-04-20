@@ -28,26 +28,62 @@ def apply_pro_style():
         header { background-color: rgba(0,0,0,0) !important; }
         [data-testid="stSidebar"] { background-color: #0E1117 !important; border-right: 1px solid rgba(255,255,255,0.05); }
         
-        .path-display { color: #4A90E2; font-family: monospace; font-size: 0.8rem; background: #1A1D24; padding: 8px 12px; border-radius: 4px; margin-bottom: 10px; border: 1px solid #2D323B; }
+        /* Breadcrumb Styling */
+        .breadcrumb-container {
+            display: flex;
+            align-items: center;
+            flex-wrap: wrap;
+            gap: 5px;
+            padding: 10px 12px;
+            background: rgba(255,255,255,0.03);
+            border: 1px solid rgba(255,255,255,0.08);
+            border-radius: 8px;
+            margin-bottom: 15px;
+        }
+        .breadcrumb-item {
+            color: #4A90E2;
+            font-size: 0.85rem;
+            font-weight: 500;
+        }
+        .breadcrumb-sep {
+            color: #444;
+            font-size: 0.7rem;
+        }
 
+        /* Navigation Buttons Styling */
+        .nav-btn-container {
+            display: flex;
+            gap: 10px;
+            margin-bottom: 20px;
+        }
+        
+        .stButton button {
+            border-radius: 8px !important;
+            transition: all 0.2s ease !important;
+        }
+        
+        /* Sidebar Heading Styling */
+        .sidebar-heading {
+            color: #555;
+            font-size: 0.7rem;
+            font-weight: 800;
+            text-transform: uppercase;
+            letter-spacing: 1.5px;
+            margin: 20px 0 10px 0;
+        }
+
+        /* Welcome Banner */
         .welcome-banner {
             background: rgba(74, 144, 226, 0.05);
             border: 1px solid rgba(74, 144, 226, 0.2);
             color: #4A90E2;
-            padding: 25px;
+            padding: 30px;
             border-radius: 12px;
             text-align: center;
             margin-bottom: 30px;
-            font-size: 1.1rem;
         }
 
         .media-box img, .media-box video { border-radius: 8px; box-shadow: 0 40px 100px rgba(0,0,0,0.8); border: 1px solid rgba(255,255,255,0.05); max-height: 80vh !important; margin: 0 auto; display: block; }
-        
-        .stButton button { border-radius: 6px !important; transition: all 0.2s ease; }
-        button[key*="folder_"] { color: #F4D03F !important; text-align: left !important; }
-        button[key*="file_"] { color: #E6E6E6 !important; text-align: left !important; }
-        
-        .sidebar-heading { color: #555; font-size: 0.7rem; font-weight: 800; text-transform: uppercase; letter-spacing: 1.5px; margin: 15px 0 5px 0; }
         </style>
     """, unsafe_allow_html=True)
 
@@ -87,25 +123,37 @@ def perform_upload(file_bytes, custom_name, folder_path):
 
 # --- 5. Sidebar UI ---
 with st.sidebar:
-    st.markdown("### 🔐 Admin Access")
+    st.markdown("### 🔐 Admin")
     pwd = st.text_input("Password", type="password", placeholder="Enter Password", label_visibility="collapsed")
     if st.button("Unlock Vault", use_container_width=True):
         if pwd == ADMIN_PASSWORD:
             st.session_state.authenticated = True
-            st.toast("Authenticated", icon="🔓")
+            st.toast("Access Granted", icon="🔓")
         else: st.error("Access Denied")
 
-    st.markdown('<p class="sidebar-heading">Location</p>', unsafe_allow_html=True)
-    st.markdown(f'<div class="path-display">📂 {st.session_state.current_path}</div>', unsafe_allow_html=True)
+    st.markdown('<p class="sidebar-heading">Browse Location</p>', unsafe_allow_html=True)
     
-    c_back, c_home = st.columns(2)
-    with c_back:
-        if st.button("⬅️ Back", use_container_width=True):
+    # --- FRIENDLY BREADCRUMB UI ---
+    # Convert path BCH-FILES/Folder/Sub into Home > Folder > Sub
+    path_parts = st.session_state.current_path.split('/')
+    friendly_path = "Home" if len(path_parts) == 1 else "Home > " + " > ".join(path_parts[1:])
+    
+    st.markdown(f"""
+        <div class="breadcrumb-container">
+            <span style="font-size:1.1rem; margin-right:5px;">📂</span>
+            <span class="breadcrumb-item">{friendly_path}</span>
+        </div>
+    """, unsafe_allow_html=True)
+    
+    # --- REDESIGNED NAV BUTTONS ---
+    c1, c2 = st.columns(2)
+    with c1:
+        if st.button("⬅️ Back", use_container_width=True, help="Go to parent folder"):
             if st.session_state.current_path != ROOT_FOLDER:
                 st.session_state.current_path = st.session_state.current_path.rsplit('/', 1)[0]
                 st.rerun()
-    with c_home:
-        if st.button("🏠 Home", use_container_width=True):
+    with c2:
+        if st.button("🏠 Home", use_container_width=True, help="Back to Root"):
             st.session_state.current_path = ROOT_FOLDER
             st.rerun()
 
@@ -124,13 +172,14 @@ with st.sidebar:
         with col_file:
             icon = "▶️" if pid == st.session_state.current_filename else "📄"
             if st.button(f"{icon} {name}", key=f"file_{pid}", use_container_width=True):
-                resp = requests.get(f['secure_url'])
-                st.session_state.file_data = resp.content
-                st.session_state.current_filename = pid
-                st.session_state.current_type = f['r_type']
-                st.session_state.current_url = f['secure_url']
-                st.session_state.page_num = 0
-                st.rerun()
+                with st.spinner(""):
+                    resp = requests.get(f['secure_url'])
+                    st.session_state.file_data = resp.content
+                    st.session_state.current_filename = pid
+                    st.session_state.current_type = f['r_type']
+                    st.session_state.current_url = f['secure_url']
+                    st.session_state.page_num = 0
+                    st.rerun()
         with col_del:
             if st.session_state.authenticated:
                 if st.button("🗑️", key=f"del_{pid}"):
@@ -145,18 +194,20 @@ if st.session_state.file_data is None:
     st.markdown("<div style='height: 10vh;'></div>", unsafe_allow_html=True)
     _, mid, _ = st.columns([1, 2, 1])
     with mid:
-        folder_display_name = st.session_state.current_path.split('/')[-1]
-        
-        # Friendly Message
+        # User-friendly folder name
+        current_display = st.session_state.current_path.split('/')[-1]
+        if current_display == ROOT_FOLDER: current_display = "Root Library"
+
         st.markdown(f"""
             <div class="welcome-banner">
-                📁 You are in <b>{folder_display_name}</b> now.<br>
+                <span style="font-size:2.5rem; display:block; margin-bottom:10px;">📂</span>
+                You are in <b>{current_display}</b> now.<br>
                 {"This folder is empty. Upload your files below!" if not files and not folders else "Manage your folder content below."}
             </div>
         """, unsafe_allow_html=True)
         
         if st.session_state.authenticated:
-            # RESTRICTION LOGIC: Only allow sub-folders if currently at the ROOT
+            # RESTRICTION: Only allow sub-folders at ROOT
             if st.session_state.current_path == ROOT_FOLDER:
                 with st.expander("📁 Create New Sub-folder"):
                     nf = st.text_input("Folder Name")
@@ -164,7 +215,6 @@ if st.session_state.file_data is None:
                         st.session_state.current_path += f"/{nf}"
                         st.rerun()
             
-            # Upload is always allowed in any folder
             with st.expander("📤 Upload to this Folder"):
                 un = st.text_input("File Display Name")
                 uf = st.file_uploader("Select Media", type=["pdf", "png", "jpg", "mp4"])
@@ -182,7 +232,7 @@ if st.session_state.file_data is None:
             st.info("🔐 Please enter Admin Password in the sidebar to enable controls.")
 
 else:
-    # Viewer logic
+    # Viewer logic (PDF, Image, Video)
     clean_n = st.session_state.current_filename.split('/')[-1]
     st.markdown(f"<div style='text-align:center; color:#555; letter-spacing:5px; font-size:11px; margin: 15px 0;'>{clean_n.upper()}</div>", unsafe_allow_html=True)
 
