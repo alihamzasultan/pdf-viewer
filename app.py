@@ -256,8 +256,8 @@ else:
     _, d_col, c_col, _ = st.columns([5, 2, 2, 5])
     with d_col:
         ext = st.session_state.current_url.split('.')[-1]
-        st.download_button("📥 Download", st.session_state.file_data, f"{clean_n}.{ext}", use_container_width=True)
+        st.download_button("Download", st.session_state.file_data, f"{clean_n}.{ext}", use_container_width=True)
     with c_col:
-        if st.button("✖ Close", use_container_width=True):
+        if st.button("Close", use_container_width=True):
             st.session_state.file_data = None
             st.rerun()
