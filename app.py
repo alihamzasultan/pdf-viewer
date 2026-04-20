@@ -37,8 +37,9 @@ def apply_pro_style():
         button[key*="folder_"] { color: #F4D03F !important; text-align: left !important; border-color: rgba(244,208,63,0.1) !important; }
         button[key*="file_"] { color: #E6E6E6 !important; text-align: left !important; }
         
-        /* Red Delete Buttons */
-        button[key*="del_"]:hover { border-color: #FF4B4B !important; color: #FF4B4B !important; }
+        /* Specific styling for Trash/Delete */
+        button[key*="del_"] { color: #666 !important; border: none !important; background: transparent !important; }
+        button[key*="del_"]:hover { color: #FF4B4B !important; background: rgba(255,75,75,0.1) !important; }
         </style>
     """, unsafe_allow_html=True)
 
@@ -56,34 +57,40 @@ def get_items_in_path(path):
     folders = []
     files = []
     try:
-        # Get Subfolders
+        # Get Subfolders - This is where the 404 usually happens if folder is empty
         sub_folders_res = cloudinary.api.subfolders(path)
         folders = [folder['name'] for folder in sub_folders_res.get('folders', [])]
-        
+    except Exception as e:
+        # If Cloudinary returns 404, we assume the folder is just empty
+        pass
+
+    try:
         # Get Files
         for rt in ['image', 'video', 'raw']:
             res = cloudinary.api.resources(resource_type=rt, type="upload", prefix=path + "/", max_results=100)
             for item in res.get('resources', []):
+                # Ensure file is directly in this path
                 if item['public_id'].rsplit('/', 1)[0] == path:
                     item['r_type'] = rt
                     item['display_name'] = item['public_id'].split('/')[-1]
                     files.append(item)
-    except Exception as e:
-        # If 404, the folder is simply empty/new. We return empty lists.
-        if "not found" in str(e).lower(): return [], []
-        st.error(f"Sync Error: {e}")
+    except Exception:
+        pass
+        
     return sorted(folders), sorted(files, key=lambda x: x['display_name'])
 
-def delete_folder_recursive(path):
+def delete_folder_logic(path):
     try:
-        # 1. Delete all resources in that folder (all types)
-        for rt in ['image', 'video', 'raw']:
-            cloudinary.api.delete_resources_by_prefix(path + "/", resource_type=rt)
-        # 2. Delete the folder itself
+        # Cloudinary requires deleting all contents before deleting the folder name
+        with st.spinner("Cleaning folder contents..."):
+            for rt in ['image', 'video', 'raw']:
+                cloudinary.api.delete_resources_by_prefix(path + "/", resource_type=rt)
+        
+        # Now delete the empty folder
         cloudinary.api.delete_folder(path)
         return True
     except Exception as e:
-        st.error(f"Folder Delete Failed: {e}")
+        st.error(f"Deletion failed: {e}")
         return False
 
 def perform_upload(file_bytes, custom_name, folder_path):
@@ -98,20 +105,18 @@ def perform_upload(file_bytes, custom_name, folder_path):
 
 # --- 5. Sidebar UI ---
 with st.sidebar:
-    st.markdown("### 🛡️ Security")
+    st.markdown("### 🔐 Admin Access")
     pwd = st.text_input("Password", type="password", placeholder="Enter Password", label_visibility="collapsed")
-    if st.button("Unlock Admin Mode", use_container_width=True):
+    if st.button("Unlock Vault", use_container_width=True):
         if pwd == ADMIN_PASSWORD:
             st.session_state.authenticated = True
-            st.toast("Admin Access Active", icon="🔓")
+            st.toast("Authenticated", icon="🔓")
         else:
-            st.session_state.authenticated = False
-            st.error("Invalid Password")
+            st.error("Access Denied")
 
-    st.markdown('<p class="sidebar-heading">Current Location</p>', unsafe_allow_html=True)
+    st.markdown('<p class="sidebar-heading">Navigator</p>', unsafe_allow_html=True)
     st.markdown(f'<div class="path-display">📂 {st.session_state.current_path}</div>', unsafe_allow_html=True)
     
-    # Navigation
     c_back, c_home = st.columns(2)
     with c_back:
         if st.button("⬅️ Back", use_container_width=True):
@@ -123,84 +128,82 @@ with st.sidebar:
             st.session_state.current_path = ROOT_FOLDER
             st.rerun()
 
-    st.markdown('<p class="sidebar-heading">Explorer</p>', unsafe_allow_html=True)
+    st.markdown('<p class="sidebar-heading">Folders & Files</p>', unsafe_allow_html=True)
     folders, files = get_items_in_path(st.session_state.current_path)
 
-    # Display Folders with Delete Option
+    # Folders
     for f in folders:
-        full_folder_path = f"{st.session_state.current_path}/{f}"
-        col_folder, col_del_f = st.columns([4, 1])
-        with col_folder:
+        f_full_path = f"{st.session_state.current_path}/{f}"
+        col_f, col_d = st.columns([4, 1])
+        with col_f:
             if st.button(f"📁 {f}", key=f"folder_{f}", use_container_width=True):
-                st.session_state.current_path = full_folder_path
+                st.session_state.current_path = f_full_path
                 st.rerun()
-        with col_del_f:
+        with col_d:
             if st.session_state.authenticated:
-                if st.button("🗑️", key=f"del_folder_{f}", help="Delete folder and all contents"):
-                    if delete_folder_recursive(full_folder_path):
-                        st.toast(f"Deleted folder: {f}")
+                if st.button("🗑️", key=f"del_f_{f}"):
+                    if delete_folder_logic(f_full_path):
+                        st.toast(f"Removed {f}")
                         st.rerun()
 
-    # Display Files
+    # Files
     for f in files:
         pid = f['public_id']
         name = f['display_name']
-        col_f, col_d = st.columns([4, 1])
-        with col_f:
+        col_file, col_del = st.columns([4, 1])
+        with col_file:
             active = pid == st.session_state.current_filename
             icon = "▶️" if active else "📄"
             if st.button(f"{icon} {name}", key=f"file_{pid}", use_container_width=True):
-                with st.spinner(""):
-                    resp = requests.get(f['secure_url'])
-                    st.session_state.file_data = resp.content
-                    st.session_state.current_filename = pid
-                    st.session_state.current_type = f['r_type']
-                    st.session_state.current_url = f['secure_url']
-                    st.session_state.page_num = 0
-                    st.rerun()
-        with col_d:
+                resp = requests.get(f['secure_url'])
+                st.session_state.file_data = resp.content
+                st.session_state.current_filename = pid
+                st.session_state.current_type = f['r_type']
+                st.session_state.current_url = f['secure_url']
+                st.session_state.page_num = 0
+                st.rerun()
+        with col_del:
             if st.session_state.authenticated:
                 if st.button("🗑️", key=f"del_file_{pid}"):
                     cloudinary.uploader.destroy(pid, resource_type=f['r_type'])
                     if st.session_state.current_filename == pid: st.session_state.file_data = None
                     st.rerun()
 
-# --- 6. Main Content Area ---
+# --- 6. Main Area ---
 apply_pro_style()
 
 if st.session_state.file_data is None:
     st.markdown("<div style='height: 15vh;'></div>", unsafe_allow_html=True)
     _, mid, _ = st.columns([1, 2, 1])
     with mid:
-        st.title("BCH Cloud Vault")
-        st.caption(f"Current Path: {st.session_state.current_path}")
+        st.title("BCH Vault Explorer")
+        st.caption(f"Active Folder: {st.session_state.current_path}")
         
         if st.session_state.authenticated:
-            with st.expander("➕ New Folder"):
-                new_f_name = st.text_input("Folder Name")
-                if st.button("Set Navigation to New Folder"):
-                    # Folder creation happens on first file upload
-                    st.session_state.current_path += f"/{new_f_name}"
+            with st.expander("📁 Create Sub-folder"):
+                nf = st.text_input("New Folder Name")
+                if st.button("Enter New Folder"):
+                    st.session_state.current_path += f"/{nf}"
                     st.rerun()
 
-            with st.expander("📤 Upload to Folder"):
-                up_name = st.text_input("Filename")
-                up_file = st.file_uploader("Select Media", type=["pdf", "png", "jpg", "mp4"])
-                if st.button("Upload") and up_file and up_name:
-                    ext = up_file.name.split('.')[-1]
-                    with st.spinner("Processing..."):
-                        b = up_file.read()
-                        url, rt = perform_upload(b, f"{up_name}.{ext}", st.session_state.current_path)
+            with st.expander("📤 Upload Media"):
+                un = st.text_input("Display Name")
+                uf = st.file_uploader("Select File", type=["pdf", "png", "jpg", "mp4"])
+                if st.button("Commit Upload") and uf and un:
+                    ext = uf.name.split('.')[-1]
+                    with st.spinner("Uploading..."):
+                        b = uf.read()
+                        url, rt = perform_upload(b, f"{un}.{ext}", st.session_state.current_path)
                         st.session_state.file_data = b
-                        st.session_state.current_filename = f"{st.session_state.current_path}/{up_name}"
+                        st.session_state.current_filename = f"{st.session_state.current_path}/{un}"
                         st.session_state.current_type = rt
                         st.session_state.current_url = url
                         st.rerun()
         else:
-            st.info("💡 Enter Admin Password in the sidebar to manage files and folders.")
+            st.info("🔐 Unlock Admin Mode in the sidebar to create folders or upload files.")
 
 else:
-    # Viewer
+    # Title display
     clean_n = st.session_state.current_filename.split('/')[-1]
     st.markdown(f"<div style='text-align:center; color:#555; letter-spacing:5px; font-size:11px; margin: 15px 0;'>{clean_n.upper()}</div>", unsafe_allow_html=True)
 
