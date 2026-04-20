@@ -182,7 +182,7 @@ if st.session_state.file_data is None:
         if st.session_state.authenticated:
             with st.expander("📁 Create Sub-folder"):
                 nf = st.text_input("New Folder Name")
-                if st.button("Enter New Folder"):
+                if st.button("Create and Enter New Folder"):
                     st.session_state.current_path += f"/{nf}"
                     st.rerun()
 
