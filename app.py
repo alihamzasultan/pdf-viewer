@@ -30,59 +30,20 @@ def apply_pro_style():
         
         /* Breadcrumb Styling */
         .breadcrumb-container {
-            display: flex;
-            align-items: center;
-            flex-wrap: wrap;
-            gap: 5px;
-            padding: 10px 12px;
-            background: rgba(255,255,255,0.03);
-            border: 1px solid rgba(255,255,255,0.08);
-            border-radius: 8px;
-            margin-bottom: 15px;
-        }
-        .breadcrumb-item {
-            color: #4A90E2;
-            font-size: 0.85rem;
-            font-weight: 500;
-        }
-        .breadcrumb-sep {
-            color: #444;
-            font-size: 0.7rem;
+            display: flex; align-items: center; padding: 10px 12px;
+            background: rgba(255,255,255,0.03); border: 1px solid rgba(255,255,255,0.08);
+            border-radius: 8px; margin-bottom: 15px;
         }
 
-        /* Navigation Buttons Styling */
-        .nav-btn-container {
-            display: flex;
-            gap: 10px;
-            margin-bottom: 20px;
-        }
+        /* Sidebar Buttons */
+        .stButton button { border-radius: 8px !important; transition: all 0.2s ease !important; }
         
-        .stButton button {
-            border-radius: 8px !important;
-            transition: all 0.2s ease !important;
-        }
-        
-        /* Sidebar Heading Styling */
-        .sidebar-heading {
-            color: #555;
-            font-size: 0.7rem;
-            font-weight: 800;
-            text-transform: uppercase;
-            letter-spacing: 1.5px;
-            margin: 20px 0 10px 0;
-        }
+        /* Trash Icon Styling */
+        button[key*="del_"] { color: #555 !important; border: none !important; background: transparent !important; }
+        button[key*="del_"]:hover { color: #FF4B4B !important; background: rgba(255,75,75,0.1) !important; }
 
-        /* Welcome Banner */
-        .welcome-banner {
-            background: rgba(74, 144, 226, 0.05);
-            border: 1px solid rgba(74, 144, 226, 0.2);
-            color: #4A90E2;
-            padding: 30px;
-            border-radius: 12px;
-            text-align: center;
-            margin-bottom: 30px;
-        }
-
+        .sidebar-heading { color: #555; font-size: 0.7rem; font-weight: 800; text-transform: uppercase; letter-spacing: 1.5px; margin: 20px 0 10px 0; }
+        .welcome-banner { background: rgba(74, 144, 226, 0.05); border: 1px solid rgba(74, 144, 226, 0.2); color: #4A90E2; padding: 30px; border-radius: 12px; text-align: center; margin-bottom: 30px; }
         .media-box img, .media-box video { border-radius: 8px; box-shadow: 0 40px 100px rgba(0,0,0,0.8); border: 1px solid rgba(255,255,255,0.05); max-height: 80vh !important; margin: 0 auto; display: block; }
         </style>
     """, unsafe_allow_html=True)
@@ -96,6 +57,20 @@ if "current_type" not in st.session_state: st.session_state.current_type = ""
 if "page_num" not in st.session_state: st.session_state.page_num = 0
 
 # --- 4. Cloudinary Engine ---
+
+def delete_folder_recursive(path):
+    """Recursively deletes all contents of a folder and then the folder itself."""
+    try:
+        # Delete all files by prefix for all resource types
+        for rt in ['image', 'video', 'raw']:
+            cloudinary.api.delete_resources_by_prefix(path + "/", resource_type=rt)
+        # Delete the now-empty folder
+        cloudinary.api.delete_folder(path)
+        return True
+    except Exception as e:
+        st.error(f"Deletion failed: {e}")
+        return False
+
 def get_items_in_path(path):
     folders, files = [], []
     try:
@@ -133,38 +108,41 @@ with st.sidebar:
 
     st.markdown('<p class="sidebar-heading">Browse Location</p>', unsafe_allow_html=True)
     
-    # --- FRIENDLY BREADCRUMB UI ---
-    # Convert path BCH-FILES/Folder/Sub into Home > Folder > Sub
     path_parts = st.session_state.current_path.split('/')
     friendly_path = "Home" if len(path_parts) == 1 else "Home > " + " > ".join(path_parts[1:])
     
-    st.markdown(f"""
-        <div class="breadcrumb-container">
-            <span style="font-size:1.1rem; margin-right:5px;">📂</span>
-            <span class="breadcrumb-item">{friendly_path}</span>
-        </div>
-    """, unsafe_allow_html=True)
+    st.markdown(f'<div class="breadcrumb-container"><span style="font-size:1.1rem; margin-right:5px;">📂</span><span style="color:#4A90E2; font-size:0.85rem; font-weight:500;">{friendly_path}</span></div>', unsafe_allow_html=True)
     
-    # --- REDESIGNED NAV BUTTONS ---
     c1, c2 = st.columns(2)
     with c1:
-        if st.button("⬅️ Back", use_container_width=True, help="Go to parent folder"):
+        if st.button("⬅️ Back", use_container_width=True):
             if st.session_state.current_path != ROOT_FOLDER:
                 st.session_state.current_path = st.session_state.current_path.rsplit('/', 1)[0]
                 st.rerun()
     with c2:
-        if st.button("🏠 Home", use_container_width=True, help="Back to Root"):
+        if st.button("🏠 Home", use_container_width=True):
             st.session_state.current_path = ROOT_FOLDER
             st.rerun()
 
     st.markdown('<p class="sidebar-heading">Folders & Files</p>', unsafe_allow_html=True)
     folders, files = get_items_in_path(st.session_state.current_path)
 
+    # --- FOLDERS WITH DELETE ---
     for f in folders:
-        if st.button(f"📁 {f}", key=f"folder_{f}", use_container_width=True):
-            st.session_state.current_path += f"/{f}"
-            st.rerun()
+        f_full_path = f"{st.session_state.current_path}/{f}"
+        col_f, col_d_f = st.columns([4, 1])
+        with col_f:
+            if st.button(f"📁 {f}", key=f"folder_{f}", use_container_width=True):
+                st.session_state.current_path = f_full_path
+                st.rerun()
+        with col_d_f:
+            if st.session_state.authenticated:
+                if st.button("🗑️", key=f"del_folder_{f}", help="Delete folder and all contents"):
+                    if delete_folder_recursive(f_full_path):
+                        st.toast(f"Deleted folder {f}")
+                        st.rerun()
 
+    # --- FILES WITH DELETE ---
     for f in files:
         pid = f['public_id']
         name = f['display_name']
@@ -182,7 +160,7 @@ with st.sidebar:
                     st.rerun()
         with col_del:
             if st.session_state.authenticated:
-                if st.button("🗑️", key=f"del_{pid}"):
+                if st.button("🗑️", key=f"del_file_{pid}"):
                     cloudinary.uploader.destroy(pid, resource_type=f['r_type'])
                     if st.session_state.current_filename == pid: st.session_state.file_data = None
                     st.rerun()
@@ -194,7 +172,6 @@ if st.session_state.file_data is None:
     st.markdown("<div style='height: 10vh;'></div>", unsafe_allow_html=True)
     _, mid, _ = st.columns([1, 2, 1])
     with mid:
-        # User-friendly folder name
         current_display = st.session_state.current_path.split('/')[-1]
         if current_display == ROOT_FOLDER: current_display = "Root Library"
 
@@ -207,7 +184,6 @@ if st.session_state.file_data is None:
         """, unsafe_allow_html=True)
         
         if st.session_state.authenticated:
-            # RESTRICTION: Only allow sub-folders at ROOT
             if st.session_state.current_path == ROOT_FOLDER:
                 with st.expander("📁 Create New Sub-folder"):
                     nf = st.text_input("Folder Name")
@@ -230,7 +206,6 @@ if st.session_state.file_data is None:
                         st.rerun()
         else:
             st.info("🔐 Please enter Admin Password in the sidebar to enable controls.")
-
 else:
     # Viewer logic (PDF, Image, Video)
     clean_n = st.session_state.current_filename.split('/')[-1]
