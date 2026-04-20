@@ -29,18 +29,16 @@ def apply_pro_style():
         [data-testid="stSidebar"] { background-color: #0E1117 !important; border-right: 1px solid rgba(255,255,255,0.05); }
         
         .sidebar-heading { color: #555; font-size: 0.7rem; font-weight: 800; text-transform: uppercase; letter-spacing: 1.5px; margin: 15px 0 5px 0; }
-        
-        /* Path Breadcrumb */
-        .path-display { color: #4A90E2; font-family: monospace; font-size: 0.8rem; background: #1A1D24; padding: 8px 12px; border-radius: 4px; margin-bottom: 10px; border: 1px solid #2D323B; overflow: hidden; text-overflow: ellipsis; }
+        .path-display { color: #4A90E2; font-family: monospace; font-size: 0.8rem; background: #1A1D24; padding: 8px 12px; border-radius: 4px; margin-bottom: 10px; border: 1px solid #2D323B; white-space: nowrap; overflow-x: auto; }
 
-        /* Media Viewport */
         .media-box img, .media-box video { border-radius: 8px; box-shadow: 0 40px 100px rgba(0,0,0,0.8); border: 1px solid rgba(255,255,255,0.05); max-height: 82vh !important; margin: 0 auto; display: block; }
         
         .stButton button { border-radius: 6px !important; transition: all 0.2s ease; }
-        
-        /* Folder vs File Colors */
-        button[key*="folder_"] { color: #F4D03F !important; text-align: left !important; border-color: rgba(244,208,63,0.2) !important; }
+        button[key*="folder_"] { color: #F4D03F !important; text-align: left !important; border-color: rgba(244,208,63,0.1) !important; }
         button[key*="file_"] { color: #E6E6E6 !important; text-align: left !important; }
+        
+        /* Red Delete Buttons */
+        button[key*="del_"]:hover { border-color: #FF4B4B !important; color: #FF4B4B !important; }
         </style>
     """, unsafe_allow_html=True)
 
@@ -55,29 +53,38 @@ if "page_num" not in st.session_state: st.session_state.page_num = 0
 # --- 4. Cloudinary Engine ---
 
 def get_items_in_path(path):
-    """Fetches subfolders and files for the given path using corrected API methods."""
     folders = []
     files = []
     try:
-        # CORRECTED METHOD: subfolders (no underscore)
+        # Get Subfolders
         sub_folders_res = cloudinary.api.subfolders(path)
         folders = [folder['name'] for folder in sub_folders_res.get('folders', [])]
         
-        # Get Files in this specific folder
+        # Get Files
         for rt in ['image', 'video', 'raw']:
             res = cloudinary.api.resources(resource_type=rt, type="upload", prefix=path + "/", max_results=100)
             for item in res.get('resources', []):
-                # Only show items directly in this directory
                 if item['public_id'].rsplit('/', 1)[0] == path:
                     item['r_type'] = rt
                     item['display_name'] = item['public_id'].split('/')[-1]
                     files.append(item)
     except Exception as e:
-        # Check if folder is just empty/new (Cloudinary throws error if folder doesn't 'exist' yet)
-        if "not found" in str(e).lower():
-            return [], []
+        # If 404, the folder is simply empty/new. We return empty lists.
+        if "not found" in str(e).lower(): return [], []
         st.error(f"Sync Error: {e}")
     return sorted(folders), sorted(files, key=lambda x: x['display_name'])
+
+def delete_folder_recursive(path):
+    try:
+        # 1. Delete all resources in that folder (all types)
+        for rt in ['image', 'video', 'raw']:
+            cloudinary.api.delete_resources_by_prefix(path + "/", resource_type=rt)
+        # 2. Delete the folder itself
+        cloudinary.api.delete_folder(path)
+        return True
+    except Exception as e:
+        st.error(f"Folder Delete Failed: {e}")
+        return False
 
 def perform_upload(file_bytes, custom_name, folder_path):
     ext = custom_name.split('.')[-1].lower()
@@ -85,11 +92,7 @@ def perform_upload(file_bytes, custom_name, folder_path):
     clean_id = custom_name.rsplit('.', 1)[0]
     
     resp = cloudinary.uploader.upload(
-        file_bytes, 
-        folder=folder_path, 
-        public_id=clean_id, 
-        resource_type=r_type, 
-        overwrite=True
+        file_bytes, folder=folder_path, public_id=clean_id, resource_type=r_type, overwrite=True
     )
     return resp['secure_url'], r_type
 
@@ -123,13 +126,22 @@ with st.sidebar:
     st.markdown('<p class="sidebar-heading">Explorer</p>', unsafe_allow_html=True)
     folders, files = get_items_in_path(st.session_state.current_path)
 
-    # Folders
+    # Display Folders with Delete Option
     for f in folders:
-        if st.button(f"📁 {f}", key=f"folder_{f}", use_container_width=True):
-            st.session_state.current_path += f"/{f}"
-            st.rerun()
+        full_folder_path = f"{st.session_state.current_path}/{f}"
+        col_folder, col_del_f = st.columns([4, 1])
+        with col_folder:
+            if st.button(f"📁 {f}", key=f"folder_{f}", use_container_width=True):
+                st.session_state.current_path = full_folder_path
+                st.rerun()
+        with col_del_f:
+            if st.session_state.authenticated:
+                if st.button("🗑️", key=f"del_folder_{f}", help="Delete folder and all contents"):
+                    if delete_folder_recursive(full_folder_path):
+                        st.toast(f"Deleted folder: {f}")
+                        st.rerun()
 
-    # Files
+    # Display Files
     for f in files:
         pid = f['public_id']
         name = f['display_name']
@@ -148,7 +160,7 @@ with st.sidebar:
                     st.rerun()
         with col_d:
             if st.session_state.authenticated:
-                if st.button("🗑️", key=f"del_{pid}"):
+                if st.button("🗑️", key=f"del_file_{pid}"):
                     cloudinary.uploader.destroy(pid, resource_type=f['r_type'])
                     if st.session_state.current_filename == pid: st.session_state.file_data = None
                     st.rerun()
@@ -161,32 +173,31 @@ if st.session_state.file_data is None:
     _, mid, _ = st.columns([1, 2, 1])
     with mid:
         st.title("BCH Cloud Vault")
-        st.caption(f"Folder: {st.session_state.current_path}")
+        st.caption(f"Current Path: {st.session_state.current_path}")
         
         if st.session_state.authenticated:
             with st.expander("➕ New Folder"):
-                new_f = st.text_input("Sub-folder Name", placeholder="e.g. Project_Alpha")
-                if st.button("Create Folder Context"):
-                    # We append to path. Folder physically creates on first upload.
-                    st.session_state.current_path += f"/{new_f}"
+                new_f_name = st.text_input("Folder Name")
+                if st.button("Set Navigation to New Folder"):
+                    # Folder creation happens on first file upload
+                    st.session_state.current_path += f"/{new_f_name}"
                     st.rerun()
 
-            with st.expander("📤 Upload to this Folder"):
-                up_name = st.text_input("Name this file", placeholder="e.g. final_presentation")
+            with st.expander("📤 Upload to Folder"):
+                up_name = st.text_input("Filename")
                 up_file = st.file_uploader("Select Media", type=["pdf", "png", "jpg", "mp4"])
-                if st.button("Upload Now") and up_file and up_name:
+                if st.button("Upload") and up_file and up_name:
                     ext = up_file.name.split('.')[-1]
-                    full_name = f"{up_name}.{ext}"
-                    with st.spinner("Uploading..."):
+                    with st.spinner("Processing..."):
                         b = up_file.read()
-                        url, rt = perform_upload(b, full_name, st.session_state.current_path)
+                        url, rt = perform_upload(b, f"{up_name}.{ext}", st.session_state.current_path)
                         st.session_state.file_data = b
                         st.session_state.current_filename = f"{st.session_state.current_path}/{up_name}"
                         st.session_state.current_type = rt
                         st.session_state.current_url = url
                         st.rerun()
         else:
-            st.info("💡 Enter Admin Password in the sidebar to manage this vault.")
+            st.info("💡 Enter Admin Password in the sidebar to manage files and folders.")
 
 else:
     # Viewer
