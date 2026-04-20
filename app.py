@@ -2,6 +2,7 @@ import streamlit as st
 import fitz  # PyMuPDF
 import os
 import requests
+import base64
 import cloudinary
 import cloudinary.uploader
 import cloudinary.api
@@ -29,31 +30,25 @@ def apply_pro_style():
         header { background-color: rgba(0,0,0,0) !important; }
         [data-testid="stSidebar"] { background-color: #0E1117 !important; border-right: 1px solid rgba(255,255,255,0.05); }
         
-        /* Navigation Breadcrumb */
         .breadcrumb-container {
             display: flex; align-items: center; padding: 12px;
             background: rgba(255,255,255,0.03); border: 1px solid rgba(255,255,255,0.08);
             border-radius: 8px; margin-bottom: 15px;
         }
 
-        /* Sidebar Buttons */
         .stButton button { border-radius: 8px !important; background-color: #1E2127 !important; border: 1px solid #2D3139 !important; color: #E0E0E0 !important; }
         .stButton button:hover { border-color: #4A90E2 !important; color: #4A90E2 !important; }
         
-        /* Trash Icon */
-        button[key*="del_"] { color: #555 !important; border: none !important; background: transparent !important; }
-        button[key*="del_"]:hover { color: #FF4B4B !important; background: rgba(255,75,75,0.1) !important; }
-
-        /* --- VIEWPORT FIX --- */
-        .viewport-wrapper {
+        /* --- CENTERED VIEWPORT FIX --- */
+        .viewport-container {
             display: flex; justify-content: center; align-items: center;
-            width: 100%; height: 70vh; overflow: hidden; margin-top: 10px;
+            width: 100%; min-height: 60vh; margin-top: 20px;
         }
-        .viewport-wrapper img, .viewport-wrapper video {
-            max-width: 100% !important; max-height: 100% !important;
-            object-fit: contain !important; border-radius: 8px;
+        .media-preview {
+            max-width: 90% !important; max-height: 75vh !important;
+            object-fit: contain !important; border-radius: 12px;
             box-shadow: 0 40px 100px rgba(0,0,0,0.8);
-            border: 1px solid rgba(255,255,255,0.05);
+            border: 1px solid rgba(255,255,255,0.1);
         }
 
         .sidebar-heading { color: #555; font-size: 0.7rem; font-weight: 800; text-transform: uppercase; letter-spacing: 1.5px; margin: 20px 0 10px 0; }
@@ -71,8 +66,7 @@ if "current_url" not in st.session_state: st.session_state.current_url = ""
 if "page_num" not in st.session_state: st.session_state.page_num = 0
 if "virtual_folders" not in st.session_state: st.session_state.virtual_folders = set()
 
-# --- 4. Cloudinary Engine ---
-
+# --- 4. Helper Functions ---
 def get_items_in_path(path):
     folders, files = set(), []
     for vf in st.session_state.virtual_folders:
@@ -85,7 +79,6 @@ def get_items_in_path(path):
         for rt in ['image', 'video', 'raw']:
             res = cloudinary.api.resources(resource_type=rt, type="upload", prefix=path + "/", max_results=100)
             for item in res.get('resources', []):
-                # Normalize path check
                 if item['public_id'].rsplit('/', 1)[0] == path:
                     item['r_type'] = rt
                     item['display_name'] = item['public_id'].split('/')[-1]
@@ -93,12 +86,15 @@ def get_items_in_path(path):
     except: pass
     return sorted(list(folders)), sorted(files, key=lambda x: x['display_name'])
 
-def perform_upload(file_bytes, custom_name, folder_path):
-    ext = custom_name.split('.')[-1].lower()
-    r_type = "image" if ext in ['jpg', 'jpeg', 'png', 'webp'] else "video" if ext in ['mp4', 'mov'] else "raw"
-    clean_id = custom_name.rsplit('.', 1)[0]
-    resp = cloudinary.uploader.upload(file_bytes, folder=folder_path, public_id=clean_id, resource_type=r_type, overwrite=True)
-    return resp['secure_url'], r_type
+def fetch_file_bytes(url):
+    """Safely fetch bytes and verify it's not an error page."""
+    try:
+        response = requests.get(url, stream=True)
+        if response.status_code == 200:
+            return response.content
+        return None
+    except:
+        return None
 
 # --- 5. Sidebar UI ---
 with st.sidebar:
@@ -154,14 +150,17 @@ with st.sidebar:
             icon = "▶️" if active else "📄"
             if st.button(f"{icon} {name}", key=f"file_{pid}", use_container_width=True):
                 with st.spinner("Fetching..."):
-                    resp = requests.get(f['secure_url'])
-                    st.session_state.file_data = resp.content
-                    st.session_state.current_filename = pid
-                    st.session_state.current_type = f['r_type']
-                    st.session_state.current_url = f['secure_url']
-                    st.session_state.current_format = f.get('format', f['secure_url'].split('.')[-1])
-                    st.session_state.page_num = 0
-                    st.rerun()
+                    data = fetch_file_bytes(f['secure_url'])
+                    if data:
+                        st.session_state.file_data = data
+                        st.session_state.current_filename = pid
+                        st.session_state.current_type = f['r_type']
+                        st.session_state.current_url = f['secure_url']
+                        st.session_state.current_format = f.get('format', f['secure_url'].split('.')[-1])
+                        st.session_state.page_num = 0
+                        st.rerun()
+                    else:
+                        st.error("Failed to load file.")
         with df:
             if st.session_state.authenticated:
                 if st.button("🗑️", key=f"del_file_{pid}"):
@@ -177,94 +176,75 @@ if st.session_state.file_data is None:
     _, mid, _ = st.columns([1, 2, 1])
     with mid:
         curr_name = st.session_state.current_path.split('/')[-1]
-        st.markdown(f'<div class="welcome-banner">📂 You are in <b>{curr_name}</b> now.<br>{"Folder empty. Upload below!" if not files and not folders else "Manage files below."}</div>', unsafe_allow_html=True)
-        
+        st.markdown(f'<div class="welcome-banner">📂 You are in <b>{curr_name}</b> now.</div>', unsafe_allow_html=True)
         if st.session_state.authenticated:
-            if st.session_state.current_path == ROOT_FOLDER:
-                with st.expander("📁 Create New Sub-folder"):
-                    nf = st.text_input("Folder Name")
-                    if st.button("Create"):
-                        new_p = f"{ROOT_FOLDER}/{nf}"
-                        st.session_state.virtual_folders.add(new_p)
-                        st.session_state.current_path = new_p
-                        st.rerun()
             with st.expander("📤 Upload Media"):
                 un = st.text_input("Display Name")
                 uf = st.file_uploader("Select File", type=["pdf", "png", "jpg", "mp4"])
                 if st.button("Upload") and uf and un:
                     with st.spinner("Uploading..."):
-                        url, rt = perform_upload(uf.read(), f"{un}.{uf.name.split('.')[-1]}", st.session_state.current_path)
-                        st.session_state.current_filename = f"{st.session_state.current_path}/{un}"
-                        st.session_state.current_type = rt
-                        st.session_state.current_url = url
-                        st.session_state.file_data = requests.get(url).content
+                        ext = uf.name.split('.')[-1]
+                        r_type = "image" if ext.lower() in ['jpg', 'jpeg', 'png', 'webp'] else "video" if ext.lower() in ['mp4', 'mov'] else "raw"
+                        resp = cloudinary.uploader.upload(uf.read(), folder=st.session_state.current_path, public_id=un, resource_type=r_type, overwrite=True)
+                        st.session_state.file_data = requests.get(resp['secure_url']).content
+                        st.session_state.current_filename = resp['public_id']
+                        st.session_state.current_type = r_type
+                        st.session_state.current_url = resp['secure_url']
                         st.rerun()
-        else: st.info("🔐 Unlock Admin mode to manage content.")
 
 else:
-    # FILENAME
     clean_n = st.session_state.current_filename.split('/')[-1]
     st.markdown(f"<div style='text-align:center; color:#555; letter-spacing:5px; font-size:11px; margin: 15px 0;'>{clean_n.upper()}</div>", unsafe_allow_html=True)
 
-    # RENDERER
-    if st.session_state.current_type == "raw": # PDF
-        doc = fitz.open(stream=st.session_state.file_data, filetype="pdf")
-        st.session_state.total_pages = len(doc)
-        page = doc.load_page(st.session_state.page_num)
-        pix = page.get_pixmap(matrix=fitz.Matrix(2.5, 2.5))
-        n1, main, n2 = st.columns([1, 14, 1], vertical_alignment="center")
-        with n1:
-            if st.button("〈", key="p") and st.session_state.page_num > 0:
-                st.session_state.page_num -= 1
-                st.rerun()
-        with main:
-            st.markdown('<div class="viewport-wrapper">', unsafe_allow_html=True)
-            st.image(pix.tobytes("png"))
-            st.markdown('</div>', unsafe_allow_html=True)
-            st.markdown(f"<div style='text-align:center; color:#444; font-size:12px; margin-top:10px;'>{st.session_state.page_num+1} / {st.session_state.total_pages}</div>", unsafe_allow_html=True)
-        with n2:
-            if st.button("〉", key="n") and st.session_state.page_num < st.session_state.total_pages-1:
-                st.session_state.page_num += 1
-                st.rerun()
-    
+    # --- Renderers with Fixed Alignment ---
+    if st.session_state.current_type == "raw": # PDF Renderer
+        try:
+            doc = fitz.open(stream=st.session_state.file_data, filetype="pdf")
+            st.session_state.total_pages = len(doc)
+            page = doc.load_page(st.session_state.page_num)
+            pix = page.get_pixmap(matrix=fitz.Matrix(2.0, 2.0))
+            img_b64 = base64.b64encode(pix.tobytes("png")).decode()
+            
+            n1, main, n2 = st.columns([1, 8, 1], vertical_alignment="center")
+            with n1:
+                if st.button("〈", key="p") and st.session_state.page_num > 0:
+                    st.session_state.page_num -= 1
+                    st.rerun()
+            with main:
+                st.markdown(f'<div class="viewport-container"><img src="data:image/png;base64,{img_b64}" class="media-preview"></div>', unsafe_allow_html=True)
+                st.markdown(f"<div style='text-align:center; color:#444; font-size:12px; margin-top:10px;'>{st.session_state.page_num+1} / {st.session_state.total_pages}</div>", unsafe_allow_html=True)
+            with n2:
+                if st.button("〉", key="n") and st.session_state.page_num < st.session_state.total_pages-1:
+                    st.session_state.page_num += 1
+                    st.rerun()
+        except:
+            st.error("This PDF cannot be previewed.")
+
     elif st.session_state.current_type == "image":
-        st.markdown('<div class="viewport-wrapper">', unsafe_allow_html=True)
-        st.image(st.session_state.file_data)
-        st.markdown('</div>', unsafe_allow_html=True)
+        img_b64 = base64.b64encode(st.session_state.file_data).decode()
+        st.markdown(f'<div class="viewport-container"><img src="data:image/image;base64,{img_b64}" class="media-preview"></div>', unsafe_allow_html=True)
     
     elif st.session_state.current_type == "video":
-        st.markdown('<div class="viewport-wrapper">', unsafe_allow_html=True)
-        st.video(st.session_state.current_url)
-        st.markdown('</div>', unsafe_allow_html=True)
+        st.markdown(f'<div class="viewport-container"><video controls class="media-preview"><source src="{st.session_state.current_url}"></video></div>', unsafe_allow_html=True)
 
-# --- 7. Download & Close ---
+    # --- Footer Actions ---
     st.markdown("<br>", unsafe_allow_html=True)
     _, d_col, c_col, _ = st.columns([5, 2, 2, 5])
     
-    # Prepare filename and extension
-    # Extract the base name (remove folder path)
-    base_display_name = st.session_state.current_filename.split('/')[-1]
-    
-    # Get the extension (Cloudinary usually provides 'format', otherwise we grab from URL)
-    extension = st.session_state.current_format.lower()
-    
-    # Ensure the extension isn't duplicated (e.g., if the user typed "file.pdf" as name)
-    if base_display_name.lower().endswith(f".{extension}"):
-        full_download_name = base_display_name
-    else:
-        full_download_name = f"{base_display_name}.{extension}"
+    # Precise filename reconstruction
+    ext = st.session_state.current_format.lower()
+    disp_name = st.session_state.current_filename.split('/')[-1]
+    dl_name = disp_name if disp_name.lower().endswith(f".{ext}") else f"{disp_name}.{ext}"
 
     with d_col:
         st.download_button(
             label="Download",
             data=st.session_state.file_data,
-            file_name=full_download_name,
-            mime=None, # Streamlit will automatically guess MIME type from filename extension
+            file_name=dl_name,
+            mime=f"application/octet-stream", # Forces binary download instead of text
             use_container_width=True
         )
-        
     with c_col:
         if st.button("Close", use_container_width=True):
             st.session_state.file_data = None
-            st.session_state.current_filename = ""
             st.rerun()
