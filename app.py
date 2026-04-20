@@ -95,6 +95,19 @@ def get_items_in_path(path):
     except: pass
     return sorted(list(folders)), sorted(files, key=lambda x: x['display_name'])
 
+    def get_file_icon(name, r_type):
+        ext = name.split('.')[-1].lower() if '.' in name else ""
+        if ext == 'pdf': return "📕"  # PDF Icon
+        if ext in ['ppt', 'pptx']: return "📊"  # PowerPoint Icon
+        if ext in ['doc', 'docx']: return "📝"  # Word Icon
+        if ext in ['xls', 'xlsx']: return "📈"  # Excel Icon
+        if r_type == 'image': return "🖼️"  # Image Icon
+        if r_type == 'video': return "🎬"  # Video Icon
+        return "📄"  # Default Icon
+
+    st.markdown('<p class="sidebar-heading">Explorer</p>', unsafe_allow_html=True)
+    folders, files = get_items_in_path(st.session_state.current_path)
+    
 # --- Sidebar ---
 with st.sidebar:
     st.markdown("### 🔐 Admin")
@@ -125,11 +138,17 @@ with st.sidebar:
                         st.rerun()
                     except: pass
 
+    # UPDATED FILE LOOP
     for f in files:
         pid, name = f['public_id'], f['display_name']
         cf, df = st.columns([4, 1])
+        
+        # Determine the icon based on file extension/type
+        icon = get_file_icon(name, f['r_type'])
+        
         with cf:
-            if st.button(f"📄 {name}", key=f"file_{pid}", use_container_width=True):
+            # Show the specific icon + filename
+            if st.button(f"{icon} {name}", key=f"file_{pid}", use_container_width=True):
                 with st.spinner("Loading..."):
                     resp = requests.get(f['secure_url'])
                     st.session_state.file_data = resp.content
@@ -142,7 +161,8 @@ with st.sidebar:
             if st.session_state.authenticated:
                 if st.button("🗑️", key=f"del_file_{pid}"):
                     cloudinary.uploader.destroy(pid, resource_type=f['r_type'])
-                    if st.session_state.current_filename == pid: st.session_state.file_data = None
+                    if st.session_state.current_filename == pid: 
+                        st.session_state.file_data = None
                     st.rerun()
 
 # --- Main Area ---
