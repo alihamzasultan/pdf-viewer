@@ -28,22 +28,19 @@ def apply_pro_style():
         header { background-color: rgba(0,0,0,0) !important; }
         [data-testid="stSidebar"] { background-color: #0E1117 !important; border-right: 1px solid rgba(255,255,255,0.05); }
         
-        /* Path Breadcrumb in Sidebar */
         .path-display { color: #4A90E2; font-family: monospace; font-size: 0.8rem; background: #1A1D24; padding: 8px 12px; border-radius: 4px; margin-bottom: 10px; border: 1px solid #2D323B; }
 
-        /* Welcome Banner */
         .welcome-banner {
-            background: rgba(74, 144, 226, 0.1);
-            border: 1px solid rgba(74, 144, 226, 0.3);
+            background: rgba(74, 144, 226, 0.05);
+            border: 1px solid rgba(74, 144, 226, 0.2);
             color: #4A90E2;
-            padding: 20px;
-            border-radius: 10px;
+            padding: 25px;
+            border-radius: 12px;
             text-align: center;
             margin-bottom: 30px;
             font-size: 1.1rem;
         }
 
-        /* Media Viewport */
         .media-box img, .media-box video { border-radius: 8px; box-shadow: 0 40px 100px rgba(0,0,0,0.8); border: 1px solid rgba(255,255,255,0.05); max-height: 80vh !important; margin: 0 auto; display: block; }
         
         .stButton button { border-radius: 6px !important; transition: all 0.2s ease; }
@@ -63,14 +60,12 @@ if "current_type" not in st.session_state: st.session_state.current_type = ""
 if "page_num" not in st.session_state: st.session_state.page_num = 0
 
 # --- 4. Cloudinary Engine ---
-
 def get_items_in_path(path):
-    folders = []
-    files = []
+    folders, files = [], []
     try:
         sub_folders_res = cloudinary.api.subfolders(path)
         folders = [folder['name'] for folder in sub_folders_res.get('folders', [])]
-    except: pass # Handle 404/Empty
+    except: pass
     
     try:
         for rt in ['image', 'video', 'raw']:
@@ -98,8 +93,7 @@ with st.sidebar:
         if pwd == ADMIN_PASSWORD:
             st.session_state.authenticated = True
             st.toast("Authenticated", icon="🔓")
-        else:
-            st.error("Access Denied")
+        else: st.error("Access Denied")
 
     st.markdown('<p class="sidebar-heading">Location</p>', unsafe_allow_html=True)
     st.markdown(f'<div class="path-display">📂 {st.session_state.current_path}</div>', unsafe_allow_html=True)
@@ -118,13 +112,11 @@ with st.sidebar:
     st.markdown('<p class="sidebar-heading">Folders & Files</p>', unsafe_allow_html=True)
     folders, files = get_items_in_path(st.session_state.current_path)
 
-    # Folders
     for f in folders:
         if st.button(f"📁 {f}", key=f"folder_{f}", use_container_width=True):
             st.session_state.current_path += f"/{f}"
             st.rerun()
 
-    # Files
     for f in files:
         pid = f['public_id']
         name = f['display_name']
@@ -153,34 +145,32 @@ if st.session_state.file_data is None:
     st.markdown("<div style='height: 10vh;'></div>", unsafe_allow_html=True)
     _, mid, _ = st.columns([1, 2, 1])
     with mid:
-        # FRIENDLY MESSAGE LOGIC
         folder_display_name = st.session_state.current_path.split('/')[-1]
         
-        # If folder is empty (no subfolders and no files)
-        if not folders and not files:
-            st.markdown(f"""
-                <div class="welcome-banner">
-                    📂 You are in <b>{folder_display_name}</b> now.<br>
-                    This folder is currently empty. You can start by uploading files below!
-                </div>
-            """, unsafe_allow_html=True)
-        else:
-            st.title("BCH Vault Explorer")
-            st.caption(f"Currently in: {st.session_state.current_path}")
+        # Friendly Message
+        st.markdown(f"""
+            <div class="welcome-banner">
+                📁 You are in <b>{folder_display_name}</b> now.<br>
+                {"This folder is empty. Upload your files below!" if not files and not folders else "Manage your folder content below."}
+            </div>
+        """, unsafe_allow_html=True)
         
         if st.session_state.authenticated:
-            with st.expander("📁 Create New Sub-folder"):
-                nf = st.text_input("Folder Name")
-                if st.button("Enter New Folder"):
-                    st.session_state.current_path += f"/{nf}"
-                    st.rerun()
-
+            # RESTRICTION LOGIC: Only allow sub-folders if currently at the ROOT
+            if st.session_state.current_path == ROOT_FOLDER:
+                with st.expander("📁 Create New Sub-folder"):
+                    nf = st.text_input("Folder Name")
+                    if st.button("Create"):
+                        st.session_state.current_path += f"/{nf}"
+                        st.rerun()
+            
+            # Upload is always allowed in any folder
             with st.expander("📤 Upload to this Folder"):
                 un = st.text_input("File Display Name")
                 uf = st.file_uploader("Select Media", type=["pdf", "png", "jpg", "mp4"])
                 if st.button("Confirm & Upload") and uf and un:
                     ext = uf.name.split('.')[-1]
-                    with st.spinner("Syncing to Cloud..."):
+                    with st.spinner("Syncing..."):
                         b = uf.read()
                         url, rt = perform_upload(b, f"{un}.{ext}", st.session_state.current_path)
                         st.session_state.file_data = b
@@ -189,10 +179,10 @@ if st.session_state.file_data is None:
                         st.session_state.current_url = url
                         st.rerun()
         else:
-            st.info("🔐 Please enter the **Admin Password** in the sidebar to create folders or upload content.")
+            st.info("🔐 Please enter Admin Password in the sidebar to enable controls.")
 
 else:
-    # Viewer logic remains high-res and professional
+    # Viewer logic
     clean_n = st.session_state.current_filename.split('/')[-1]
     st.markdown(f"<div style='text-align:center; color:#555; letter-spacing:5px; font-size:11px; margin: 15px 0;'>{clean_n.upper()}</div>", unsafe_allow_html=True)
 
