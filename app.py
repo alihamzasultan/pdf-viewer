@@ -189,7 +189,7 @@ if st.session_state.file_data is None:
             with st.expander("📤 Upload Media"):
                 un = st.text_input("File Name")
                 uf = st.file_uploader("Select File", type=["pdf", "png", "jpg", "mp4"])
-                if st.button("Commit Upload") and uf and un:
+                if st.button("Upload File") and uf and un:
                     ext = uf.name.split('.')[-1]
                     with st.spinner("Uploading..."):
                         b = uf.read()
