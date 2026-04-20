@@ -29,7 +29,7 @@ def apply_pro_style():
         header { background-color: rgba(0,0,0,0) !important; }
         [data-testid="stSidebar"] { background-color: #0E1117 !important; border-right: 1px solid rgba(255,255,255,0.05); }
         
-        /* Friendly Breadcrumb */
+        /* Navigation Breadcrumb */
         .breadcrumb-container {
             display: flex; align-items: center; padding: 12px;
             background: rgba(255,255,255,0.03); border: 1px solid rgba(255,255,255,0.08);
@@ -44,10 +44,10 @@ def apply_pro_style():
         button[key*="del_"] { color: #555 !important; border: none !important; background: transparent !important; }
         button[key*="del_"]:hover { color: #FF4B4B !important; background: rgba(255,75,75,0.1) !important; }
 
-        /* --- MEDIA VIEWPORT FIX --- */
+        /* --- VIEWPORT FIX --- */
         .viewport-wrapper {
             display: flex; justify-content: center; align-items: center;
-            width: 100%; height: 75vh; overflow: hidden; margin-top: 10px;
+            width: 100%; height: 70vh; overflow: hidden; margin-top: 10px;
         }
         .viewport-wrapper img, .viewport-wrapper video {
             max-width: 100% !important; max-height: 100% !important;
@@ -67,50 +67,31 @@ if "current_path" not in st.session_state: st.session_state.current_path = ROOT_
 if "file_data" not in st.session_state: st.session_state.file_data = None
 if "current_filename" not in st.session_state: st.session_state.current_filename = ""
 if "current_type" not in st.session_state: st.session_state.current_type = ""
+if "current_url" not in st.session_state: st.session_state.current_url = ""
 if "page_num" not in st.session_state: st.session_state.page_num = 0
 if "virtual_folders" not in st.session_state: st.session_state.virtual_folders = set()
 
-# --- 4. Robust Sync Engine ---
+# --- 4. Cloudinary Engine ---
 
 def get_items_in_path(path):
     folders, files = set(), []
-    
-    # Add Virtual Folders
     for vf in st.session_state.virtual_folders:
-        if vf.rsplit('/', 1)[0] == path:
-            folders.add(vf.split('/')[-1])
-
-    # Fetch Actual Folders
+        if vf.rsplit('/', 1)[0] == path: folders.add(vf.split('/')[-1])
     try:
         sub_folders_res = cloudinary.api.subfolders(path)
         for f in sub_folders_res.get('folders', []): folders.add(f['name'])
     except: pass
-
-    # Fetch Actual Files (Checking all 3 types)
     try:
         for rt in ['image', 'video', 'raw']:
             res = cloudinary.api.resources(resource_type=rt, type="upload", prefix=path + "/", max_results=100)
             for item in res.get('resources', []):
-                # FIXED: Strong path normalization to ensure files in subfolders show correctly
-                item_parent = item['public_id'].rsplit('/', 1)[0]
-                if item_parent == path:
+                # Normalize path check
+                if item['public_id'].rsplit('/', 1)[0] == path:
                     item['r_type'] = rt
                     item['display_name'] = item['public_id'].split('/')[-1]
                     files.append(item)
     except: pass
-    
     return sorted(list(folders)), sorted(files, key=lambda x: x['display_name'])
-
-def delete_folder_recursive(path):
-    try:
-        for rt in ['image', 'video', 'raw']:
-            try: cloudinary.api.delete_resources_by_prefix(path + "/", resource_type=rt)
-            except: pass
-        try: cloudinary.api.delete_folder(path)
-        except: pass
-        st.session_state.virtual_folders.discard(path)
-        return True
-    except: return False
 
 def perform_upload(file_bytes, custom_name, folder_path):
     ext = custom_name.split('.')[-1].lower()
@@ -149,16 +130,21 @@ with st.sidebar:
     folders, files = get_items_in_path(st.session_state.current_path)
 
     for f in folders:
-        f_path = f"{st.session_state.current_path}/{f}"
+        f_p = f"{st.session_state.current_path}/{f}"
         cf, df = st.columns([4, 1])
         with cf:
             if st.button(f"📁 {f}", key=f"folder_{f}", use_container_width=True):
-                st.session_state.current_path = f_path
+                st.session_state.current_path = f_p
                 st.rerun()
         with df:
             if st.session_state.authenticated:
                 if st.button("🗑️", key=f"del_f_{f}"):
-                    if delete_folder_recursive(f_path): st.rerun()
+                    try:
+                        for rt in ['image', 'video', 'raw']: cloudinary.api.delete_resources_by_prefix(f_p + "/", resource_type=rt)
+                        cloudinary.api.delete_folder(f_p)
+                        st.session_state.virtual_folders.discard(f_p)
+                        st.rerun()
+                    except: pass
 
     for f in files:
         pid, name = f['public_id'], f['display_name']
@@ -167,12 +153,13 @@ with st.sidebar:
             active = pid == st.session_state.current_filename
             icon = "▶️" if active else "📄"
             if st.button(f"{icon} {name}", key=f"file_{pid}", use_container_width=True):
-                with st.spinner(""):
+                with st.spinner("Fetching..."):
                     resp = requests.get(f['secure_url'])
                     st.session_state.file_data = resp.content
                     st.session_state.current_filename = pid
                     st.session_state.current_type = f['r_type']
                     st.session_state.current_url = f['secure_url']
+                    st.session_state.current_format = f.get('format', f['secure_url'].split('.')[-1])
                     st.session_state.page_num = 0
                     st.rerun()
         with df:
@@ -190,8 +177,7 @@ if st.session_state.file_data is None:
     _, mid, _ = st.columns([1, 2, 1])
     with mid:
         curr_name = st.session_state.current_path.split('/')[-1]
-        display = "Root Library" if curr_name == ROOT_FOLDER else curr_name
-        st.markdown(f'<div class="welcome-banner">📁 You are in <b>{display}</b> now.<br>{"Folder is empty. Upload below!" if not files and not folders else "Manage your files below."}</div>', unsafe_allow_html=True)
+        st.markdown(f'<div class="welcome-banner">📂 You are in <b>{curr_name}</b> now.<br>{"Folder empty. Upload below!" if not files and not folders else "Manage files below."}</div>', unsafe_allow_html=True)
         
         if st.session_state.authenticated:
             if st.session_state.current_path == ROOT_FOLDER:
@@ -205,15 +191,15 @@ if st.session_state.file_data is None:
             with st.expander("📤 Upload Media"):
                 un = st.text_input("Display Name")
                 uf = st.file_uploader("Select File", type=["pdf", "png", "jpg", "mp4"])
-                if st.button("Confirm Upload") and uf and un:
+                if st.button("Upload") and uf and un:
                     with st.spinner("Uploading..."):
                         url, rt = perform_upload(uf.read(), f"{un}.{uf.name.split('.')[-1]}", st.session_state.current_path)
-                        st.session_state.file_data = requests.get(url).content
                         st.session_state.current_filename = f"{st.session_state.current_path}/{un}"
                         st.session_state.current_type = rt
                         st.session_state.current_url = url
+                        st.session_state.file_data = requests.get(url).content
                         st.rerun()
-        else: st.info("🔐 Unlock Admin Mode in the sidebar to enable controls.")
+        else: st.info("🔐 Unlock Admin mode to manage content.")
 
 else:
     # FILENAME
@@ -251,13 +237,20 @@ else:
         st.video(st.session_state.current_url)
         st.markdown('</div>', unsafe_allow_html=True)
 
-    # ACTIONS
+    # DOWNLOAD & CLOSE
     st.markdown("<br>", unsafe_allow_html=True)
     _, d_col, c_col, _ = st.columns([5, 2, 2, 5])
     with d_col:
-        ext = st.session_state.current_url.split('.')[-1]
-        st.download_button("Download", st.session_state.file_data, f"{clean_n}.{ext}", use_container_width=True)
+        # We use st.session_state.current_format to ensure the download has the correct extension
+        st.download_button(
+            label="📥 Download",
+            data=st.session_state.file_data,
+            file_name=f"{clean_n}.{st.session_state.current_format}",
+            mime="application/octet-stream",
+            use_container_width=True,
+            key="final_download_btn"
+        )
     with c_col:
-        if st.button("Close", use_container_width=True):
+        if st.button("✖ Close", use_container_width=True):
             st.session_state.file_data = None
             st.rerun()
