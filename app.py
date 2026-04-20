@@ -30,13 +30,23 @@ def apply_pro_style():
         
         /* Breadcrumb Styling */
         .breadcrumb-container {
-            display: flex; align-items: center; padding: 10px 12px;
+            display: flex; align-items: center; padding: 12px;
             background: rgba(255,255,255,0.03); border: 1px solid rgba(255,255,255,0.08);
             border-radius: 8px; margin-bottom: 15px;
         }
 
-        /* Sidebar Buttons */
-        .stButton button { border-radius: 8px !important; transition: all 0.2s ease !important; }
+        /* Professional Sidebar Buttons */
+        .stButton button { 
+            border-radius: 8px !important; 
+            background-color: #1E2127 !important;
+            border: 1px solid #2D3139 !important;
+            color: #E0E0E0 !important;
+            transition: all 0.2s ease !important;
+        }
+        .stButton button:hover {
+            border-color: #4A90E2 !important;
+            color: #4A90E2 !important;
+        }
         
         /* Trash Icon Styling */
         button[key*="del_"] { color: #555 !important; border: none !important; background: transparent !important; }
@@ -55,30 +65,28 @@ if "file_data" not in st.session_state: st.session_state.file_data = None
 if "current_filename" not in st.session_state: st.session_state.current_filename = ""
 if "current_type" not in st.session_state: st.session_state.current_type = ""
 if "page_num" not in st.session_state: st.session_state.page_num = 0
+# Track folders created in this session that might be empty on Cloudinary
+if "virtual_folders" not in st.session_state: st.session_state.virtual_folders = set()
 
 # --- 4. Cloudinary Engine ---
 
-def delete_folder_recursive(path):
-    """Recursively deletes all contents of a folder and then the folder itself."""
-    try:
-        # Delete all files by prefix for all resource types
-        for rt in ['image', 'video', 'raw']:
-            cloudinary.api.delete_resources_by_prefix(path + "/", resource_type=rt)
-        # Delete the now-empty folder
-        cloudinary.api.delete_folder(path)
-        return True
-    except Exception as e:
-        st.error(f"Deletion failed: {e}")
-        return False
-
 def get_items_in_path(path):
-    folders, files = [], []
+    folders, files = set(), []
+    
+    # Add virtual folders that belong to this path
+    for vf in st.session_state.virtual_folders:
+        if vf.rsplit('/', 1)[0] == path:
+            folders.add(vf.split('/')[-1])
+
     try:
+        # Get actual folders from Cloudinary
         sub_folders_res = cloudinary.api.subfolders(path)
-        folders = [folder['name'] for folder in sub_folders_res.get('folders', [])]
+        for folder in sub_folders_res.get('folders', []):
+            folders.add(folder['name'])
     except: pass
     
     try:
+        # Get Files
         for rt in ['image', 'video', 'raw']:
             res = cloudinary.api.resources(resource_type=rt, type="upload", prefix=path + "/", max_results=100)
             for item in res.get('resources', []):
@@ -87,7 +95,25 @@ def get_items_in_path(path):
                     item['display_name'] = item['public_id'].split('/')[-1]
                     files.append(item)
     except: pass
-    return sorted(folders), sorted(files, key=lambda x: x['display_name'])
+    
+    return sorted(list(folders)), sorted(files, key=lambda x: x['display_name'])
+
+def delete_folder_recursive(path):
+    try:
+        for rt in ['image', 'video', 'raw']:
+            cloudinary.api.delete_resources_by_prefix(path + "/", resource_type=rt)
+        cloudinary.api.delete_folder(path)
+        # Remove from virtual tracker if present
+        if path in st.session_state.virtual_folders:
+            st.session_state.virtual_folders.remove(path)
+        return True
+    except Exception as e:
+        # If it was only a virtual folder, just remove it from state
+        if path in st.session_state.virtual_folders:
+            st.session_state.virtual_folders.remove(path)
+            return True
+        st.error(f"Deletion failed: {e}")
+        return False
 
 def perform_upload(file_bytes, custom_name, folder_path):
     ext = custom_name.split('.')[-1].lower()
@@ -99,7 +125,7 @@ def perform_upload(file_bytes, custom_name, folder_path):
 # --- 5. Sidebar UI ---
 with st.sidebar:
     st.markdown("### 🔐 Admin")
-    pwd = st.text_input("Password", type="password", placeholder="Enter Password", label_visibility="collapsed")
+    pwd = st.text_input("Password", type="password", placeholder="••••••••", label_visibility="collapsed")
     if st.button("Unlock Vault", use_container_width=True):
         if pwd == ADMIN_PASSWORD:
             st.session_state.authenticated = True
@@ -111,7 +137,12 @@ with st.sidebar:
     path_parts = st.session_state.current_path.split('/')
     friendly_path = "Home" if len(path_parts) == 1 else "Home > " + " > ".join(path_parts[1:])
     
-    st.markdown(f'<div class="breadcrumb-container"><span style="font-size:1.1rem; margin-right:5px;">📂</span><span style="color:#4A90E2; font-size:0.85rem; font-weight:500;">{friendly_path}</span></div>', unsafe_allow_html=True)
+    st.markdown(f'''
+        <div class="breadcrumb-container">
+            <span style="font-size:1.1rem; margin-right:8px;">📂</span>
+            <span style="color:#4A90E2; font-size:0.85rem; font-weight:600;">{friendly_path}</span>
+        </div>
+    ''', unsafe_allow_html=True)
     
     c1, c2 = st.columns(2)
     with c1:
@@ -127,7 +158,7 @@ with st.sidebar:
     st.markdown('<p class="sidebar-heading">Folders & Files</p>', unsafe_allow_html=True)
     folders, files = get_items_in_path(st.session_state.current_path)
 
-    # --- FOLDERS WITH DELETE ---
+    # Folders Section
     for f in folders:
         f_full_path = f"{st.session_state.current_path}/{f}"
         col_f, col_d_f = st.columns([4, 1])
@@ -137,12 +168,11 @@ with st.sidebar:
                 st.rerun()
         with col_d_f:
             if st.session_state.authenticated:
-                if st.button("🗑️", key=f"del_folder_{f}", help="Delete folder and all contents"):
+                if st.button("🗑️", key=f"del_folder_{f}"):
                     if delete_folder_recursive(f_full_path):
-                        st.toast(f"Deleted folder {f}")
                         st.rerun()
 
-    # --- FILES WITH DELETE ---
+    # Files Section
     for f in files:
         pid = f['public_id']
         name = f['display_name']
@@ -150,14 +180,13 @@ with st.sidebar:
         with col_file:
             icon = "▶️" if pid == st.session_state.current_filename else "📄"
             if st.button(f"{icon} {name}", key=f"file_{pid}", use_container_width=True):
-                with st.spinner(""):
-                    resp = requests.get(f['secure_url'])
-                    st.session_state.file_data = resp.content
-                    st.session_state.current_filename = pid
-                    st.session_state.current_type = f['r_type']
-                    st.session_state.current_url = f['secure_url']
-                    st.session_state.page_num = 0
-                    st.rerun()
+                resp = requests.get(f['secure_url'])
+                st.session_state.file_data = resp.content
+                st.session_state.current_filename = pid
+                st.session_state.current_type = f['r_type']
+                st.session_state.current_url = f['secure_url']
+                st.session_state.page_num = 0
+                st.rerun()
         with col_del:
             if st.session_state.authenticated:
                 if st.button("🗑️", key=f"del_file_{pid}"):
@@ -172,23 +201,26 @@ if st.session_state.file_data is None:
     st.markdown("<div style='height: 10vh;'></div>", unsafe_allow_html=True)
     _, mid, _ = st.columns([1, 2, 1])
     with mid:
-        current_display = st.session_state.current_path.split('/')[-1]
-        if current_display == ROOT_FOLDER: current_display = "Root Library"
+        curr_name = st.session_state.current_path.split('/')[-1]
+        display_name = "Root Library" if curr_name == ROOT_FOLDER else curr_name
 
         st.markdown(f"""
             <div class="welcome-banner">
                 <span style="font-size:2.5rem; display:block; margin-bottom:10px;">📂</span>
-                You are in <b>{current_display}</b> now.<br>
+                You are in <b>{display_name}</b> now.<br>
                 {"This folder is empty. Upload your files below!" if not files and not folders else "Manage your folder content below."}
             </div>
         """, unsafe_allow_html=True)
         
         if st.session_state.authenticated:
+            # Folder creation ONLY at root
             if st.session_state.current_path == ROOT_FOLDER:
                 with st.expander("📁 Create New Sub-folder"):
                     nf = st.text_input("Folder Name")
                     if st.button("Create"):
-                        st.session_state.current_path += f"/{nf}"
+                        new_path = f"{ROOT_FOLDER}/{nf}"
+                        st.session_state.virtual_folders.add(new_path)
+                        st.session_state.current_path = new_path
                         st.rerun()
             
             with st.expander("📤 Upload to this Folder"):
@@ -205,9 +237,9 @@ if st.session_state.file_data is None:
                         st.session_state.current_url = url
                         st.rerun()
         else:
-            st.info("🔐 Please enter Admin Password in the sidebar to enable controls.")
+            st.info("🔐 Unlock Admin Mode in the sidebar to enable controls.")
 else:
-    # Viewer logic (PDF, Image, Video)
+    # Viewer
     clean_n = st.session_state.current_filename.split('/')[-1]
     st.markdown(f"<div style='text-align:center; color:#555; letter-spacing:5px; font-size:11px; margin: 15px 0;'>{clean_n.upper()}</div>", unsafe_allow_html=True)
 
