@@ -39,7 +39,6 @@ def apply_pro_style():
         .stButton button { border-radius: 8px !important; background-color: #1E2127 !important; border: 1px solid #2D3139 !important; color: #E0E0E0 !important; }
         .stButton button:hover { border-color: #4A90E2 !important; color: #4A90E2 !important; }
         
-        /* --- ENLARGED VIEWPORT --- */
         .viewport-container {
             display: flex; justify-content: center; align-items: center;
             width: 100%; min-height: 80vh; margin-top: 10px;
@@ -66,16 +65,7 @@ def apply_pro_style():
         </style>
     """, unsafe_allow_html=True)
 
-# --- State Management ---
-if "authenticated" not in st.session_state: st.session_state.authenticated = False
-if "current_path" not in st.session_state: st.session_state.current_path = ROOT_FOLDER
-if "file_data" not in st.session_state: st.session_state.file_data = None
-if "current_filename" not in st.session_state: st.session_state.current_filename = ""
-if "current_type" not in st.session_state: st.session_state.current_type = ""
-if "current_url" not in st.session_state: st.session_state.current_url = ""
-if "page_num" not in st.session_state: st.session_state.page_num = 0
-if "virtual_folders" not in st.session_state: st.session_state.virtual_folders = set()
-
+# --- 3. Helper Functions ---
 def get_items_in_path(path):
     folders, files = set(), []
     for vf in st.session_state.virtual_folders:
@@ -95,20 +85,28 @@ def get_items_in_path(path):
     except: pass
     return sorted(list(folders)), sorted(files, key=lambda x: x['display_name'])
 
-    def get_file_icon(name, r_type):
-        ext = name.split('.')[-1].lower() if '.' in name else ""
-        if ext == 'pdf': return "📕"  # PDF Icon
-        if ext in ['ppt', 'pptx']: return "📊"  # PowerPoint Icon
-        if ext in ['doc', 'docx']: return "📝"  # Word Icon
-        if ext in ['xls', 'xlsx']: return "📈"  # Excel Icon
-        if r_type == 'image': return "🖼️"  # Image Icon
-        if r_type == 'video': return "🎬"  # Video Icon
-        return "📄"  # Default Icon
+def get_file_icon(name, r_type):
+    # Determine icon based on file extension
+    ext = name.split('.')[-1].lower() if '.' in name else ""
+    if ext == 'pdf': return "📕" 
+    if ext in ['ppt', 'pptx']: return "📊" 
+    if ext in ['doc', 'docx']: return "📝" 
+    if ext in ['xls', 'xlsx']: return "📈" 
+    if r_type == 'image': return "🖼️" 
+    if r_type == 'video': return "🎬" 
+    return "📄"
 
-    st.markdown('<p class="sidebar-heading">Explorer</p>', unsafe_allow_html=True)
-    folders, files = get_items_in_path(st.session_state.current_path)
-    
-# --- Sidebar ---
+# --- 4. State Management ---
+if "authenticated" not in st.session_state: st.session_state.authenticated = False
+if "current_path" not in st.session_state: st.session_state.current_path = ROOT_FOLDER
+if "file_data" not in st.session_state: st.session_state.file_data = None
+if "current_filename" not in st.session_state: st.session_state.current_filename = ""
+if "current_type" not in st.session_state: st.session_state.current_type = ""
+if "current_url" not in st.session_state: st.session_state.current_url = ""
+if "page_num" not in st.session_state: st.session_state.page_num = 0
+if "virtual_folders" not in st.session_state: st.session_state.virtual_folders = set()
+
+# --- 5. Sidebar UI ---
 with st.sidebar:
     st.markdown("### 🔐 Admin")
     pwd = st.text_input("Password", type="password", placeholder="••••••••", label_visibility="collapsed")
@@ -121,6 +119,7 @@ with st.sidebar:
     st.markdown('<p class="sidebar-heading">Explorer</p>', unsafe_allow_html=True)
     folders, files = get_items_in_path(st.session_state.current_path)
 
+    # Folders Loop
     for f in folders:
         f_p = f"{st.session_state.current_path}/{f}"
         cf, df = st.columns([4, 1])
@@ -138,16 +137,13 @@ with st.sidebar:
                         st.rerun()
                     except: pass
 
-    # UPDATED FILE LOOP
+    # Files Loop (With Icons)
     for f in files:
         pid, name = f['public_id'], f['display_name']
         cf, df = st.columns([4, 1])
-        
-        # Determine the icon based on file extension/type
         icon = get_file_icon(name, f['r_type'])
         
         with cf:
-            # Show the specific icon + filename
             if st.button(f"{icon} {name}", key=f"file_{pid}", use_container_width=True):
                 with st.spinner("Loading..."):
                     resp = requests.get(f['secure_url'])
@@ -165,17 +161,16 @@ with st.sidebar:
                         st.session_state.file_data = None
                     st.rerun()
 
-# --- Main Area ---
+# --- 6. Main Area ---
 apply_pro_style()
 
-# CASE 1: FILE IS SELECTED
 if st.session_state.file_data:
     clean_n = st.session_state.current_filename.split('/')[-1]
     st.markdown(f"<div style='text-align:center; color:#555; letter-spacing:5px; font-size:11px; margin: 15px 0;'>{clean_n.upper()}</div>", unsafe_allow_html=True)
 
     if st.session_state.current_type == "raw": # PDF
         doc = fitz.open(stream=st.session_state.file_data, filetype="pdf")
-        total_pages = len(doc)
+        total_p = len(doc)
         page = doc.load_page(st.session_state.page_num)
         pix = page.get_pixmap(matrix=fitz.Matrix(2.0, 2.0))
         img_b64 = base64.b64encode(pix.tobytes("png")).decode()
@@ -187,9 +182,9 @@ if st.session_state.file_data:
                 st.rerun()
         with main:
             st.markdown(f'<div class="viewport-container"><img src="data:image/png;base64,{img_b64}" class="media-preview"></div>', unsafe_allow_html=True)
-            st.markdown(f"<div style='text-align:center; color:#444; font-size:12px; margin-top:10px;'>{st.session_state.page_num+1} / {total_pages}</div>", unsafe_allow_html=True)
+            st.markdown(f"<div style='text-align:center; color:#444; font-size:12px; margin-top:10px;'>{st.session_state.page_num+1} / {total_p}</div>", unsafe_allow_html=True)
         with n2:
-            if st.button("〉", key="next_p") and st.session_state.page_num < total_pages - 1:
+            if st.button("〉", key="next_p") and st.session_state.page_num < total_p - 1:
                 st.session_state.page_num += 1
                 st.rerun()
     
@@ -200,7 +195,6 @@ if st.session_state.file_data:
     elif st.session_state.current_type == "video":
         st.markdown(f'<div class="viewport-container"><video controls class="media-preview"><source src="{st.session_state.current_url}"></video></div>', unsafe_allow_html=True)
 
-    # FOOTER ACTIONS (Only here)
     st.markdown("<br>", unsafe_allow_html=True)
     _, d_col, c_col, _ = st.columns([5, 2, 2, 5])
     with d_col:
@@ -210,7 +204,6 @@ if st.session_state.file_data:
             st.session_state.file_data = None
             st.rerun()
 
-# CASE 2: NO FILE SELECTED
 else:
     st.markdown("<div style='height: 10vh;'></div>", unsafe_allow_html=True)
     _, mid, _ = st.columns([1, 2, 1])
@@ -227,7 +220,6 @@ else:
                         file_ext = uf.name.split('.')[-1].lower()
                         r_type = "image" if file_ext in ['jpg', 'jpeg', 'png', 'webp'] else "video" if file_ext in ['mp4', 'mov'] else "raw"
                         clean_id = f"{un}.{file_ext}" if r_type == "raw" else un
-                        
                         resp = cloudinary.uploader.upload(uf.read(), folder=st.session_state.current_path, public_id=clean_id, resource_type=r_type, overwrite=True)
                         st.success(f"Uploaded: {clean_id}")
                         st.rerun()
