@@ -42,9 +42,7 @@ def apply_custom_css():
             border-right: 1px solid #1e2128;
         }
         
-        [data-testid="stSidebarNav"] { display: none; } /* Hide default nav */
-
-        /* Sidebar Buttons */
+        /* Sidebar Navigation Buttons */
         .stButton button {
             border-radius: 8px !important;
             background: transparent !important;
@@ -52,235 +50,225 @@ def apply_custom_css():
             text-align: left !important;
             color: #94a3b8 !important;
             transition: 0.2s all;
+            padding: 8px 12px !important;
         }
         .stButton button:hover {
             background: #1e293b !important;
             color: #3b82f6 !important;
         }
         
-        /* Active File Highlight (Simulated) */
-        .active-file button {
-            background: rgba(59, 130, 246, 0.1) !important;
-            border: 1px solid #3b82f6 !important;
-            color: #3b82f6 !important;
-        }
-
-        /* Center Stage Layout */
-        .media-container {
+        /* Centered Media Stage */
+        .media-stage {
             display: flex;
             justify-content: center;
             align-items: center;
             background: #000000;
-            border-radius: 16px;
+            border-radius: 20px;
             border: 1px solid #1e293b;
-            box-shadow: 0 20px 25px -5px rgba(0, 0, 0, 0.5);
+            box-shadow: 0 25px 50px -12px rgba(0, 0, 0, 0.7);
             margin: auto;
             overflow: hidden;
-            min-height: 400px;
+            padding: 10px;
         }
 
-        .img-fluid {
+        .img-preview {
             max-width: 100%;
-            max-height: 80vh;
+            max-height: 75vh;
             object-fit: contain;
+            display: block;
+            margin: auto;
         }
 
-        /* Navigation Arrows */
+        /* Responsive Navigation Arrows */
         div[data-testid="column"] .nav-btn button {
-            width: 50px !important;
-            height: 50px !important;
-            background: #1e293b !important;
+            width: 54px !important;
+            height: 54px !important;
+            background: rgba(30, 41, 59, 0.7) !important;
             border: 1px solid #334155 !important;
             border-radius: 12px !important;
-            font-size: 1.2rem !important;
-            padding: 0 !important;
+            font-size: 1.5rem !important;
+            color: white !important;
             display: flex !important;
             align-items: center !important;
             justify-content: center !important;
-            color: white !important;
             margin: auto !important;
+            backdrop-filter: blur(5px);
         }
         
         div[data-testid="column"] .nav-btn button:hover {
             background: #3b82f6 !important;
             border-color: #60a5fa !important;
+            transform: scale(1.05);
         }
 
-        /* Breadcrumb */
-        .breadcrumb {
-            font-size: 0.85rem;
-            color: #64748b;
-            margin-bottom: 20px;
-            display: flex;
-            gap: 10px;
-        }
-
-        /* Rename/Download Action Bar */
-        .action-link {
+        /* Action Buttons */
+        .action-btn {
             background: #3b82f6;
             color: white !important;
             padding: 10px 20px;
             border-radius: 8px;
             text-decoration: none;
             font-weight: 600;
-            display: inline-block;
+            display: block;
             text-align: center;
+            transition: 0.3s;
         }
+        .action-btn:hover { background: #2563eb; transform: translateY(-2px); }
+
+        /* Custom Scrollbar */
+        ::-webkit-scrollbar { width: 5px; }
+        ::-webkit-scrollbar-thumb { background: #334155; border-radius: 10px; }
         </style>
     """, unsafe_allow_html=True)
 
-# --- 4. Cloudinary Helpers ---
+# --- 4. Logic Functions ---
 @st.cache_data(ttl=300)
-def fetch_vault_contents(path):
+def fetch_vault(path):
     folders, files = [], []
     try:
-        f_data = cloudinary.api.subfolders(path).get('folders', [])
-        folders = [f['name'] for f in f_data]
+        f_res = cloudinary.api.subfolders(path).get('folders', [])
+        folders = [f['name'] for f in f_res]
         
         for r_type in ['image', 'video', 'raw']:
             res = cloudinary.api.resources(resource_type=r_type, type="upload", prefix=path + "/", max_results=500)
             for item in res.get('resources', []):
-                # Ensure the file is directly in the current folder
+                # Only grab files in the current folder (not subfolders)
                 if item['public_id'].rsplit('/', 1)[0] == path:
                     item['r_type'] = r_type
+                    # We ensure 'name' is always available
                     item['name'] = item['public_id'].split('/')[-1]
                     files.append(item)
     except Exception as e:
-        st.error(f"Cloud Connection Error: {e}")
+        st.error(f"Cloud Error: {e}")
     return sorted(folders), sorted(files, key=lambda x: x['name'])
 
-def rename_asset(old_public_id, new_name, resource_type):
+def rename_asset(old_id, new_name, r_type):
     try:
-        folder_path = old_public_id.rsplit('/', 1)[0]
-        # Keep extension for raw files
-        if resource_type == 'raw' and '.' in old_public_id:
-            ext = old_public_id.split('.')[-1]
-            if not new_name.endswith(f".{ext}"):
+        folder = old_id.rsplit('/', 1)[0]
+        # Preserve extension for 'raw' files like PDFs
+        if r_type == 'raw' and '.' in old_id:
+            ext = old_id.split('.')[-1]
+            if not new_name.lower().endswith(f".{ext}".lower()):
                 new_name = f"{new_name}.{ext}"
         
-        new_public_id = f"{folder_path}/{new_name}"
-        cloudinary.uploader.rename(old_public_id, new_public_id)
+        new_id = f"{folder}/{new_name}"
+        cloudinary.uploader.rename(old_id, new_id)
         st.cache_data.clear()
-        return True, new_public_id
+        return True, ""
     except Exception as e:
         return False, str(e)
 
-# --- 5. Navigation Logic ---
+def load_file(file_obj, index):
+    st.session_state.viewer_file = file_obj
+    st.session_state.viewer_index = index
+    resp = requests.get(file_obj['secure_url'])
+    st.session_state.file_bytes = resp.content
+
+# --- 5. Session Initialization ---
 if "path" not in st.session_state: st.session_state.path = ROOT_FOLDER
 if "viewer_file" not in st.session_state: st.session_state.viewer_file = None
 if "auth" not in st.session_state: st.session_state.auth = False
 
-def change_folder(new_path):
-    st.session_state.path = new_path
-    st.session_state.viewer_file = None
-    st.cache_data.clear()
-
-def view_file(file_obj, index):
-    st.session_state.viewer_file = file_obj
-    st.session_state.viewer_index = index
-    # Pre-load bytes for PDFs/Images
-    resp = requests.get(file_obj['secure_url'])
-    st.session_state.file_bytes = resp.content
-
 # --- 6. Sidebar Implementation ---
 with st.sidebar:
-    st.markdown("<h1 style='color:#3b82f6; font-size:1.5rem;'>BCH VAULT</h1>", unsafe_allow_html=True)
+    st.markdown("<h2 style='color:#3b82f6;'>BCH VAULT</h2>", unsafe_allow_html=True)
     
-    # Auth
+    # Auth Section
     if not st.session_state.auth:
-        with st.expander("🔐 Admin Access"):
-            p = st.text_input("Key", type="password")
-            if st.button("Unlock"):
+        with st.expander("🔐 Admin Login"):
+            p = st.text_input("Access Key", type="password")
+            if st.button("Unlock Vault", use_container_width=True):
                 if p == ADMIN_PASSWORD:
                     st.session_state.auth = True
                     st.rerun()
     else:
-        st.caption("🟢 Administrator Mode")
-        if st.button("Logout"): 
+        st.success("Admin Access: ON")
+        if st.button("Lock Vault", use_container_width=True):
             st.session_state.auth = False
             st.rerun()
 
     st.divider()
     
-    # Navigation
-    nav1, nav2 = st.columns(2)
-    if nav1.button("🏠 Home", use_container_width=True): change_folder(ROOT_FOLDER); st.rerun()
-    if nav2.button("⬅️ Up", use_container_width=True):
+    # Navigation Buttons
+    c1, c2 = st.columns(2)
+    if c1.button("🏠 Home", use_container_width=True):
+        st.session_state.path = ROOT_FOLDER
+        st.session_state.viewer_file = None
+        st.rerun()
+    if c2.button("⬅️ Back", use_container_width=True):
         if st.session_state.path != ROOT_FOLDER:
-            change_folder(st.session_state.path.rsplit('/', 1)[0])
+            st.session_state.path = st.session_state.path.rsplit('/', 1)[0]
+            st.session_state.viewer_file = None
             st.rerun()
 
     # Explorer
-    folders, files = fetch_vault_contents(st.session_state.path)
+    folders, files = fetch_vault(st.session_state.path)
     
-    st.markdown("<br><p style='font-size:0.7rem; color:#475569; font-weight:700;'>DIRECTORIES</p>", unsafe_allow_html=True)
+    st.markdown("<p style='font-size:0.7rem; color:#475569; font-weight:bold; margin-top:20px;'>FOLDERS</p>", unsafe_allow_html=True)
     for f in folders:
         if st.button(f"📁 {f}", key=f"f_{f}", use_container_width=True):
-            change_folder(f"{st.session_state.path}/{f}")
+            st.session_state.path = f"{st.session_state.path}/{f}"
+            st.session_state.viewer_file = None
             st.rerun()
 
-    st.markdown("<br><p style='font-size:0.7rem; color:#475569; font-weight:700;'>ASSETS</p>", unsafe_allow_html=True)
+    st.markdown("<p style='font-size:0.7rem; color:#475569; font-weight:bold; margin-top:20px;'>FILES</p>", unsafe_allow_html=True)
     for i, f in enumerate(files):
-        is_active = st.session_state.viewer_file and st.session_state.viewer_file['public_id'] == f['public_id']
-        style_class = "active-file" if is_active else ""
-        st.markdown(f'<div class="{style_class}">', unsafe_allow_html=True)
-        if st.button(f"📄 {f['name']}", key=f"file_{i}", use_container_width=True):
-            view_file(f, i)
+        # Professional fallback for name key
+        display_name = f.get('name', f.get('display_name', 'Unnamed File'))
+        if st.button(f"📄 {display_name}", key=f"file_{i}", use_container_width=True):
+            load_file(f, i)
             st.rerun()
-        st.markdown('</div>', unsafe_allow_html=True)
 
-# --- 7. Main Content Area ---
+# --- 7. Main Area ---
 apply_custom_css()
 
-# Breadcrumb UI
-p_parts = st.session_state.path.split('/')
-b_path = " / ".join(p_parts[1:]) if len(p_parts) > 1 else "Root"
-st.markdown(f'<div class="breadcrumb"><span>Vault</span> <span>/</span> <span>{b_path}</span></div>', unsafe_allow_html=True)
+# Breadcrumb
+st.markdown(f"<div style='color:#64748b; font-size:0.8rem; margin-bottom:15px;'>Vault / {' / '.join(st.session_state.path.split('/')[1:])}</div>", unsafe_allow_html=True)
 
 if st.session_state.viewer_file:
     f = st.session_state.viewer_file
-    
-    # Viewer Header
-    h1, h2 = st.columns([0.8, 0.2])
-    h1.subheader(f['name'])
-    if h2.button("✕ Close Viewer", use_container_width=True):
+    # Safety get for the name
+    current_name = f.get('name', f.get('display_name', 'Unnamed File'))
+
+    # Header
+    head_col, close_col = st.columns([0.85, 0.15])
+    head_col.subheader(current_name)
+    if close_col.button("✕ Close", use_container_width=True):
         st.session_state.viewer_file = None
         st.rerun()
 
-    # --- CENTERING STAGE ---
-    # We use vertical_alignment="center" to keep arrows in the middle regardless of image height
-    v_prev, v_content, v_next = st.columns([1, 12, 1], vertical_alignment="center")
+    # --- THE CENTERED STAGE ---
+    v_prev, v_mid, v_next = st.columns([1, 10, 1], vertical_alignment="center")
 
     with v_prev:
         st.markdown('<div class="nav-btn">', unsafe_allow_html=True)
-        if st.button("❮", key="prev_btn"):
+        if st.button("❮", key="go_prev"):
             idx = (st.session_state.viewer_index - 1) % len(files)
-            view_file(files[idx], idx)
+            load_file(files[idx], idx)
             st.rerun()
         st.markdown('</div>', unsafe_allow_html=True)
 
-    with v_content:
-        st.markdown('<div class="media-container">', unsafe_allow_html=True)
+    with v_mid:
+        st.markdown('<div class="media-stage">', unsafe_allow_html=True)
         if f['r_type'] == "image":
             b64 = base64.b64encode(st.session_state.file_bytes).decode()
-            st.markdown(f'<img src="data:image/png;base64,{b64}" class="img-fluid">', unsafe_allow_html=True)
+            st.markdown(f'<img src="data:image/png;base64,{b64}" class="img-preview">', unsafe_allow_html=True)
         elif f['r_type'] == "video":
             st.video(f['secure_url'])
-        elif f['name'].lower().endswith('.pdf'):
+        elif current_name.lower().endswith('.pdf'):
             try:
-                pdf_doc = fitz.open(stream=st.session_state.file_bytes, filetype="pdf")
-                page = pdf_doc.load_page(0) # Preview first page
-                pix = page.get_pixmap(matrix=fitz.Matrix(2,2))
+                doc = fitz.open(stream=st.session_state.file_bytes, filetype="pdf")
+                pix = doc[0].get_pixmap(matrix=fitz.Matrix(2,2))
                 pdf_b64 = base64.b64encode(pix.tobytes("png")).decode()
-                st.markdown(f'<img src="data:image/png;base64,{pdf_b64}" class="img-fluid">', unsafe_allow_html=True)
-            except: st.warning("PDF Preview Failed")
+                st.markdown(f'<img src="data:image/png;base64,{pdf_b64}" class="img-preview">', unsafe_allow_html=True)
+            except: st.info("Preview not available for this PDF")
         st.markdown('</div>', unsafe_allow_html=True)
 
     with v_next:
         st.markdown('<div class="nav-btn">', unsafe_allow_html=True)
-        if st.button("❯", key="next_btn"):
+        if st.button("❯", key="go_next"):
             idx = (st.session_state.viewer_index + 1) % len(files)
-            view_file(files[idx], idx)
+            load_file(files[idx], idx)
             st.rerun()
         st.markdown('</div>', unsafe_allow_html=True)
 
@@ -289,19 +277,19 @@ if st.session_state.viewer_file:
     a1, a2, a3 = st.columns([1, 1, 1])
     
     with a1:
-        st.markdown(f'<a href="{f["secure_url"]}" target="_blank" class="action-link" style="width:100%">Download Original</a>', unsafe_allow_html=True)
+        st.markdown(f'<a href="{f["secure_url"]}" target="_blank" class="action-btn">Download Original</a>', unsafe_allow_html=True)
     
     if st.session_state.auth:
         with a2:
             with st.popover("✏️ Rename Asset", use_container_width=True):
-                new_n = st.text_input("New Filename", value=f['name'])
-                if st.button("Confirm Rename"):
-                    success, msg = rename_asset(f['public_id'], new_n, f['r_type'])
+                new_title = st.text_input("New Name", value=current_name)
+                if st.button("Update Filename", use_container_width=True):
+                    success, err = rename_asset(f['public_id'], new_title, f['r_type'])
                     if success:
-                        st.success("Renamed!")
+                        st.success("Renamed successfully!")
                         st.session_state.viewer_file = None
                         st.rerun()
-                    else: st.error(msg)
+                    else: st.error(err)
         with a3:
             if st.button("🗑️ Delete Permanently", use_container_width=True, type="primary"):
                 cloudinary.uploader.destroy(f['public_id'], resource_type=f['r_type'])
@@ -310,34 +298,34 @@ if st.session_state.viewer_file:
                 st.rerun()
 
 else:
-    # --- FOLDER LANDING VIEW ---
+    # Empty State
     st.markdown("<div style='height: 15vh;'></div>", unsafe_allow_html=True)
     st.markdown(f"""
-        <div style='text-align:center; padding: 50px; border: 1px dashed #334155; border-radius: 20px; background: #0f172a;'>
-            <h2 style='color:#3b82f6;'>Vault Explorer Active</h2>
-            <p style='color:#64748b;'>Select an asset from the sidebar to preview or manage files.</p>
-            <code style='color:#94a3b8;'>Path: {st.session_state.path}</code>
+        <div style='text-align:center; padding: 60px; border: 1px dashed #334155; border-radius: 24px; background: #0f172a;'>
+            <h2 style='color:#3b82f6; font-weight:700;'>BCH Vault Explorer</h2>
+            <p style='color:#64748b;'>Select a file from the sidebar to start previewing assets.</p>
         </div>
     """, unsafe_allow_html=True)
 
     if st.session_state.auth:
         st.markdown("<br>", unsafe_allow_html=True)
-        col_up1, col_up2 = st.columns(2)
-        with col_up1:
-            with st.expander("📤 Upload New Asset"):
-                up = st.file_uploader("Choose file")
-                if st.button("Upload to Cloud") and up:
-                    ext = up.name.split('.')[-1].lower()
-                    rt = "image" if ext in ['jpg','jpeg','png','webp'] else "video" if ext in ['mp4','mov'] else "raw"
-                    cloudinary.uploader.upload(up, folder=st.session_state.path, public_id=up.name.rsplit('.',1)[0] if rt != "raw" else up.name, resource_type=rt)
+        col_u1, col_u2 = st.columns(2)
+        with col_u1:
+            with st.expander("📤 Upload File"):
+                file = st.file_uploader("Select Asset")
+                if st.button("Push to Cloud") and file:
+                    ext = file.name.split('.')[-1].lower()
+                    rtype = "image" if ext in ['jpg','png','jpeg','webp'] else "video" if ext in ['mp4','mov'] else "raw"
+                    cloudinary.uploader.upload(file, folder=st.session_state.path, public_id=file.name.rsplit('.',1)[0] if rtype != 'raw' else file.name, resource_type=rtype)
                     st.cache_data.clear()
                     st.rerun()
-        with col_up2:
-            with st.expander("📁 Create Sub-Directory"):
-                fn = st.text_input("Directory Name")
-                if st.button("Initialize Folder") and fn:
-                    cloudinary.api.create_folder(f"{st.session_state.path}/{fn}")
+        with col_u2:
+            with st.expander("📁 New Directory"):
+                dirname = st.text_input("Folder Name")
+                if st.button("Create Folder") and dirname:
+                    cloudinary.api.create_folder(f"{st.session_state.path}/{dirname}")
                     st.cache_data.clear()
                     st.rerun()
 
-st.markdown(f'<div style="position: fixed; bottom: 10px; right: 20px; font-size: 0.7rem; color: #475569;">BCH Vault v3.0 | {datetime.now().year}</div>', unsafe_allow_html=True)
+# Footer
+st.markdown(f'<div style="position: fixed; bottom: 10px; right: 20px; font-size: 0.7rem; color: #475569;">BCH Vault v3.1 | {datetime.now().year}</div>', unsafe_allow_html=True)
