@@ -31,23 +31,28 @@ def apply_custom_css():
     st.markdown("""
         <style>
         @import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap');
-         [data-testid="stSidebar"] .stButton button {
-            display: flex !important;
-            justify-content: flex-start !important; /* Forces content to the left */
-            align-items: center !important;        /* Keeps icon and text vertically centered */
-            text-align: left !important;            /* Ensures text wraps to the left */
-            width: 100% !important;                 /* Makes button fill sidebar width */
-            padding-left: 20px !important;          /* Adds professional padding from the edge */
-            border: 1px solid transparent !important;
-            background: transparent !important;
-        }
+    /* FORCE sidebar buttons LEFT aligned */
+[data-testid="stSidebar"] .stButton > button {
+    display: flex !important;
+    justify-content: flex-start !important;
+    align-items: center !important;
+    text-align: left !important;
+    width: 100% !important;
+    padding: 10px 12px !important;
+    padding-left: 18px !important;
+    gap: 8px !important;
 
-        /* Hover effect for sidebar buttons */
-        [data-testid="stSidebar"] .stButton button:hover {
-            background: rgba(59, 130, 246, 0.1) !important;
-            border-color: rgba(59, 130, 246, 0.3) !important;
-            color: #3b82f6 !important;
-        }
+    background: transparent !important;
+    border: 1px solid transparent !important;
+    color: #94a3b8 !important;
+}
+
+/* Hover */
+[data-testid="stSidebar"] .stButton > button:hover {
+    background: #1e293b !important;
+    color: #3b82f6 !important;
+    border-color: rgba(59, 130, 246, 0.3) !important;
+}
 
         /* Keep the MAIN PAGE navigation arrows centered */
         div[data-testid="column"] .nav-btn button {
