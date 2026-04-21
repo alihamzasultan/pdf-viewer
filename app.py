@@ -311,7 +311,7 @@ if st.session_state.viewer_file:
     a1, a2, a3 = st.columns([1, 1, 1])
     
     with a1:
-        st.markdown(f'<a href="{f["secure_url"]}" target="_blank" class="action-btn">Download Original</a>', unsafe_allow_html=True)
+        st.markdown(f'<a href="{f["secure_url"]}" target="_blank" class="action-btn">Download</a>', unsafe_allow_html=True)
     
     if st.session_state.auth:
         with a2:
