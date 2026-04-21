@@ -296,7 +296,6 @@ if st.session_state.viewer_file:
         st.markdown('</div>', unsafe_allow_html=True)
 
     # Action Bar (Professional Footer)
-    st.markdown("<br>", unsafe_allow_html=True)
     _, ab1, ab2, ab3, ab4, _ = st.columns([2, 1, 1, 1, 1, 2])
     
     with ab1:
