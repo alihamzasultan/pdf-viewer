@@ -95,7 +95,12 @@ def apply_custom_css():
         }
 
         .media-preview {
-            max-width: 80%; border-radius: 8px;
+            max-width: 60%;      /* Reduced from 100% */
+            max-height: 400px;   /* Added fixed maximum height */
+            object-fit: contain; /* Ensures the image isn't distorted */
+            display: block;
+            margin: 0 auto;      /* Centers the image */
+            border-radius: 8px;
         }
 
         /* Download Button CSS */
