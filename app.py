@@ -296,31 +296,45 @@ if st.session_state.viewer_file:
         st.markdown('</div>', unsafe_allow_html=True)
 
     # Action Bar (Professional Footer)
-    _, ab1, ab2, ab3, ab4, _ = st.columns([2, 1, 1, 1, 1, 2])
+  # --- Centered Action Bar ---
+    st.markdown("<br>", unsafe_allow_html=True)
     
-    with ab1:
+    # 1. Determine how many buttons we need
+    # If auth: Prev, Download, Delete, Next (4 buttons)
+    # If no auth: Prev, Download, Next (3 buttons)
+    if st.session_state.auth:
+        # Creates 6 columns: [Flexible Spacer, 4 tight button cols, Flexible Spacer]
+        cols = st.columns([3, 1, 1, 1, 1, 3])
+        btn_prev, btn_down, btn_del, btn_next = cols[1], cols[2], cols[3], cols[4]
+    else:
+        # Creates 5 columns: [Flexible Spacer, 3 tight button cols, Flexible Spacer]
+        cols = st.columns([3, 1, 1, 1, 3])
+        btn_prev, btn_down, btn_next = cols[1], cols[2], cols[3]
+        btn_del = None
+
+    # 2. Place buttons in the columns
+    with btn_prev:
         if st.button("←", use_container_width=True, key="nav_prev"):
             new_idx = (st.session_state.viewer_index - 1) % len(files)
             load_file(files[new_idx], new_idx)
             st.rerun()
             
-    with ab2:
+    with btn_down:
         st.markdown(f'<a href="{f["secure_url"]}" target="_blank" class="download-link">Download</a>', unsafe_allow_html=True)
 
-    with ab3:
-        if st.session_state.auth:
-            if st.button("🗑️ Delete", use_container_width=True):
+    if btn_del:
+        with btn_del:
+            if st.button("🗑️", use_container_width=True):
                 cloudinary.uploader.destroy(f['public_id'], resource_type=f['r_type'])
                 st.session_state.viewer_file = None
                 st.cache_data.clear()
                 st.rerun()
 
-    with ab4:
+    with btn_next:
         if st.button("→", use_container_width=True, key="nav_next"):
             new_idx = (st.session_state.viewer_index + 1) % len(files)
             load_file(files[new_idx], new_idx)
             st.rerun()
-
 else:
     # --- FOLDER VIEW ---
     st.markdown("<div style='height: 5vh;'></div>", unsafe_allow_html=True)
