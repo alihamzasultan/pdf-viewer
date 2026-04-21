@@ -95,7 +95,7 @@ def apply_custom_css():
         }
 
         .media-preview {
-            max-width: 100%; border-radius: 8px;
+            max-width: 80%; border-radius: 8px;
         }
 
         /* Download Button CSS */
