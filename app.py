@@ -99,12 +99,22 @@ def apply_custom_css():
         }
 
         /* Download Button CSS */
-        .download-link {
-            display: flex; align-items: center; justify-content: center;
-            background: #4A90E2; color: white !important;
-            text-decoration: none !important; border-radius: 10px;
-            padding: 10px 20px; font-weight: 600; font-size: 14px;
+ .download-link {
+            display: flex; 
+            align-items: center; 
+            justify-content: center;
+            background: #4A90E2; 
+            color: white !important;
+            text-decoration: none !important; 
+            border-radius: 10px;
+            padding: 10px 15px; 
+            font-weight: 600; 
+            font-size: 14px;
             transition: 0.3s;
+            white-space: nowrap; /* Prevents text wrapping like 'Downlo ad' */
+            width: 100%;
+            text-align: center;
+            box-sizing: border-box;
         }
         .download-link:hover { background: #357ABD; transform: scale(1.02); }
 
