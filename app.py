@@ -44,6 +44,9 @@ def apply_custom_css():
         
         /* Sidebar Navigation Buttons */
         .stButton button {
+            justify-content: flex-start !important; /* This moves text/icons to the left */
+            text-align: left !important;           /* Ensures text alignment is left */
+            padding-left: 15px !important;         /* Adds a nice gap from the left edge */
             border-radius: 8px !important;
             background: transparent !important;
             border: 1px solid transparent !important;
