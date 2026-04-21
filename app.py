@@ -285,7 +285,7 @@ if st.session_state.viewer_file:
     _, ab1, ab2, ab3, ab4, _ = st.columns([2, 1, 1, 1, 1, 2])
     
     with ab1:
-        if st.button("← Previous", use_container_width=True, key="nav_prev"):
+        if st.button("←", use_container_width=True, key="nav_prev"):
             new_idx = (st.session_state.viewer_index - 1) % len(files)
             load_file(files[new_idx], new_idx)
             st.rerun()
@@ -302,7 +302,7 @@ if st.session_state.viewer_file:
                 st.rerun()
 
     with ab4:
-        if st.button("Next →", use_container_width=True, key="nav_next"):
+        if st.button("→", use_container_width=True, key="nav_next"):
             new_idx = (st.session_state.viewer_index + 1) % len(files)
             load_file(files[new_idx], new_idx)
             st.rerun()
