@@ -51,7 +51,7 @@ def apply_custom_css():
             background: rgba(255, 255, 255, 0.03) !important;
             border: 1px solid rgba(255, 255, 255, 0.1) !important;
             transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1) !important;
-            font-weight: 400 !important;
+            font-weight: 200 !important;
             text-align: left !important;
             padding: 10px 15px !important;
         }
