@@ -263,7 +263,7 @@ if st.session_state.viewer_file:
                     page = doc.load_page(st.session_state.pdf_page)
                     pix = page.get_pixmap(matrix=fitz.Matrix(2, 2))
                     img_data = base64.b64encode(pix.tobytes("png")).decode()
-                    st.markdown(f'<div style="text-align:center; padding:20px;"><img src="data:image/png;base64,{img_data}" style="max-height:70vh; box-shadow: 0 0 20px rgba(0,0,0,0.5);"></div>', unsafe_allow_html=True)
+                    st.markdown(f'<div style="text-align:center; padding:20px;"><img src="data:image/png;base64,{img_data}" style="max-height:60vh; box-shadow: 0 0 20px rgba(0,0,0,0.5);"></div>', unsafe_allow_html=True)
                     st.markdown(f"<p style='text-align:center; opacity:0.5;'>Page {st.session_state.pdf_page+1} of {len(doc)}</p>", unsafe_allow_html=True)
                 
                 with p1:
