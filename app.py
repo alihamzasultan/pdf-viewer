@@ -20,268 +20,324 @@ ROOT_FOLDER = "BCH-FILES"
 
 # --- 2. Page Config ---
 st.set_page_config(
-    page_title="BCH | Enterprise Vault",
+    page_title="BCH Vault | Enterprise Asset Manager",
     page_icon="🛡️",
     layout="wide",
     initial_sidebar_state="expanded"
 )
 
-# --- 3. Advanced Custom Styling ---
+# --- 3. Custom CSS (Professional Dark Theme) ---
 def apply_custom_css():
     st.markdown("""
         <style>
-        @import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;600;800&display=swap');
+        @import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap');
         
-        html, body, [class*="css"] { font-family: 'Inter', sans-serif; color: #E0E0E2; }
-        .stApp { background: radial-gradient(circle at top right, #1a1c23, #080a0c); }
+        /* Global UI */
+        html, body, [class*="css"] { font-family: 'Inter', sans-serif; color: #f0f0f0; }
+        .stApp { background-color: #0e1117; }
         
-        /* Sidebar Sticky Header */
-        [data-testid="stSidebar"] [data-testid="stSidebarHeader"] {
-            position: sticky; top: 0; z-index: 1000;
-            background-color: #0f1116 !important;
-            padding-bottom: 10px;
+        /* Sidebar Styling */
+        [data-testid="stSidebar"] {
+            background-color: #05070a !important;
+            border-right: 1px solid #1e2128;
         }
         
-        /* General Button Styling */
+        [data-testid="stSidebarNav"] { display: none; } /* Hide default nav */
+
+        /* Sidebar Buttons */
         .stButton button {
-            border-radius: 10px !important;
-            background: rgba(255, 255, 255, 0.03) !important;
-            border: 1px solid rgba(255, 255, 255, 0.1) !important;
-            transition: all 0.3s ease !important;
+            border-radius: 8px !important;
+            background: transparent !important;
+            border: 1px solid transparent !important;
+            text-align: left !important;
+            color: #94a3b8 !important;
+            transition: 0.2s all;
         }
-
-        /* --- NAVIGATION BUTTONS (SIDE ARROWS) --- */
-        /* Targets buttons inside the navigation columns */
-        div[data-testid="column"] .nav-btn-container button {
-            height: 60px !important;
-            width: 60px !important;
-            background-color: rgba(255, 255, 255, 0.05) !important;
-            border: 1px solid rgba(255, 255, 255, 0.1) !important;
-            color: white !important;
-            font-size: 1.5rem !important;
-            display: flex !important;
-            align-items: center !important;
-            justify-content: center !important;
-            margin: 0 auto !important;
-            border-radius: 12px !important;
+        .stButton button:hover {
+            background: #1e293b !important;
+            color: #3b82f6 !important;
         }
         
-        div[data-testid="column"] .nav-btn-container button:hover {
-            background-color: rgba(255, 255, 255, 0.15) !important;
-            border-color: rgba(255, 255, 255, 0.3) !important;
-            transform: scale(1.05);
+        /* Active File Highlight (Simulated) */
+        .active-file button {
+            background: rgba(59, 130, 246, 0.1) !important;
+            border: 1px solid #3b82f6 !important;
+            color: #3b82f6 !important;
         }
 
-        /* Media Container */
-        .media-card {
-            background: #000;
-            border-radius: 20px;
-            overflow: hidden;
-            border: 1px solid rgba(255,255,255,0.08);
-            box-shadow: 0 25px 50px -12px rgba(0, 0, 0, 0.5);
+        /* Center Stage Layout */
+        .media-container {
             display: flex;
             justify-content: center;
             align-items: center;
+            background: #000000;
+            border-radius: 16px;
+            border: 1px solid #1e293b;
+            box-shadow: 0 20px 25px -5px rgba(0, 0, 0, 0.5);
+            margin: auto;
+            overflow: hidden;
+            min-height: 400px;
         }
 
-        .media-preview {
+        .img-fluid {
             max-width: 100%;
-            max-height: 75vh;
+            max-height: 80vh;
             object-fit: contain;
         }
 
-        .download-link {
-            display: block; 
-            background: #4A90E2; 
+        /* Navigation Arrows */
+        div[data-testid="column"] .nav-btn button {
+            width: 50px !important;
+            height: 50px !important;
+            background: #1e293b !important;
+            border: 1px solid #334155 !important;
+            border-radius: 12px !important;
+            font-size: 1.2rem !important;
+            padding: 0 !important;
+            display: flex !important;
+            align-items: center !important;
+            justify-content: center !important;
             color: white !important;
-            text-decoration: none !important; 
-            border-radius: 10px;
-            padding: 12px 24px; 
-            font-weight: 600; 
-            text-align: center;
-            transition: 0.3s;
+            margin: auto !important;
         }
-        .download-link:hover { background: #357ABD; transform: translateY(-2px); }
         
-        /* Breadcrumbs */
+        div[data-testid="column"] .nav-btn button:hover {
+            background: #3b82f6 !important;
+            border-color: #60a5fa !important;
+        }
+
+        /* Breadcrumb */
         .breadcrumb {
-            background: rgba(255,255,255,0.03);
-            padding: 12px 20px;
-            border-radius: 12px;
-            border: 1px solid rgba(255,255,255,0.05);
-            margin-bottom: 25px;
-            display: flex; align-items: center; gap: 8px;
-            font-size: 0.9rem;
+            font-size: 0.85rem;
+            color: #64748b;
+            margin-bottom: 20px;
+            display: flex;
+            gap: 10px;
+        }
+
+        /* Rename/Download Action Bar */
+        .action-link {
+            background: #3b82f6;
+            color: white !important;
+            padding: 10px 20px;
+            border-radius: 8px;
+            text-decoration: none;
+            font-weight: 600;
+            display: inline-block;
+            text-align: center;
         }
         </style>
     """, unsafe_allow_html=True)
 
-# --- 4. Logic Functions ---
+# --- 4. Cloudinary Helpers ---
 @st.cache_data(ttl=300)
-def fetch_cloud_resources(path):
+def fetch_vault_contents(path):
     folders, files = [], []
     try:
-        sub_folders = cloudinary.api.subfolders(path).get('folders', [])
-        folders = [f['name'] for f in sub_folders]
-        for rt in ['image', 'video', 'raw']:
-            res = cloudinary.api.resources(resource_type=rt, type="upload", prefix=path + "/", max_results=500)
+        f_data = cloudinary.api.subfolders(path).get('folders', [])
+        folders = [f['name'] for f in f_data]
+        
+        for r_type in ['image', 'video', 'raw']:
+            res = cloudinary.api.resources(resource_type=r_type, type="upload", prefix=path + "/", max_results=500)
             for item in res.get('resources', []):
-                item_path = item['public_id'].rsplit('/', 1)[0]
-                if item_path == path:
-                    item['r_type'] = rt
-                    item['display_name'] = item['public_id'].split('/')[-1]
+                # Ensure the file is directly in the current folder
+                if item['public_id'].rsplit('/', 1)[0] == path:
+                    item['r_type'] = r_type
+                    item['name'] = item['public_id'].split('/')[-1]
                     files.append(item)
     except Exception as e:
-        st.error(f"Connection Error: {e}")
-    return sorted(folders), sorted(files, key=lambda x: x['display_name'])
+        st.error(f"Cloud Connection Error: {e}")
+    return sorted(folders), sorted(files, key=lambda x: x['name'])
 
-def load_file(file_info, index):
-    st.session_state.viewer_file = file_info
-    st.session_state.viewer_index = index
-    st.session_state.pdf_page = 0
-    resp = requests.get(file_info['secure_url'])
-    st.session_state.file_bytes = resp.content
+def rename_asset(old_public_id, new_name, resource_type):
+    try:
+        folder_path = old_public_id.rsplit('/', 1)[0]
+        # Keep extension for raw files
+        if resource_type == 'raw' and '.' in old_public_id:
+            ext = old_public_id.split('.')[-1]
+            if not new_name.endswith(f".{ext}"):
+                new_name = f"{new_name}.{ext}"
+        
+        new_public_id = f"{folder_path}/{new_name}"
+        cloudinary.uploader.rename(old_public_id, new_public_id)
+        st.cache_data.clear()
+        return True, new_public_id
+    except Exception as e:
+        return False, str(e)
 
-def navigate_to(new_path):
+# --- 5. Navigation Logic ---
+if "path" not in st.session_state: st.session_state.path = ROOT_FOLDER
+if "viewer_file" not in st.session_state: st.session_state.viewer_file = None
+if "auth" not in st.session_state: st.session_state.auth = False
+
+def change_folder(new_path):
     st.session_state.path = new_path
     st.session_state.viewer_file = None
     st.cache_data.clear()
-    st.rerun()
 
-# --- 5. Session State ---
-if "auth" not in st.session_state: st.session_state.auth = False
-if "path" not in st.session_state: st.session_state.path = ROOT_FOLDER
-if "viewer_file" not in st.session_state: st.session_state.viewer_file = None
+def view_file(file_obj, index):
+    st.session_state.viewer_file = file_obj
+    st.session_state.viewer_index = index
+    # Pre-load bytes for PDFs/Images
+    resp = requests.get(file_obj['secure_url'])
+    st.session_state.file_bytes = resp.content
 
-# --- 6. Sidebar ---
+# --- 6. Sidebar Implementation ---
 with st.sidebar:
-    st.markdown("<h2 style='text-align:center; color:#4A90E2;'>BCH VAULT</h2>", unsafe_allow_html=True)
+    st.markdown("<h1 style='color:#3b82f6; font-size:1.5rem;'>BCH VAULT</h1>", unsafe_allow_html=True)
+    
+    # Auth
     if not st.session_state.auth:
-        pwd = st.text_input("Access Key", type="password")
-        if st.button("Authenticate", use_container_width=True):
-            if pwd == ADMIN_PASSWORD:
-                st.session_state.auth = True
-                st.rerun()
+        with st.expander("🔐 Admin Access"):
+            p = st.text_input("Key", type="password")
+            if st.button("Unlock"):
+                if p == ADMIN_PASSWORD:
+                    st.session_state.auth = True
+                    st.rerun()
     else:
-        st.success("Admin Active")
-        if st.button("Lock Vault", use_container_width=True):
+        st.caption("🟢 Administrator Mode")
+        if st.button("Logout"): 
             st.session_state.auth = False
             st.rerun()
 
     st.divider()
-    c1, c2 = st.columns(2)
-    with c1:
-        if st.button("🏠 Home", use_container_width=True): navigate_to(ROOT_FOLDER)
-    with c2:
-        if st.button("⬅️ Back", use_container_width=True):
-            if st.session_state.path != ROOT_FOLDER:
-                navigate_to(st.session_state.path.rsplit('/', 1)[0])
-
-    folders, files = fetch_cloud_resources(st.session_state.path)
-    st.markdown("<p style='font-size:0.7rem; color:#555;'>EXPLORER</p>", unsafe_allow_html=True)
-    for f in folders:
-        if st.button(f"📁 {f}", key=f"fldr_{f}", use_container_width=True):
-            navigate_to(f"{st.session_state.path}/{f}")
-    for i, f in enumerate(files):
-        if st.button(f"📄 {f['display_name']}", key=f"file_{f['public_id']}", use_container_width=True):
-            load_file(f, i)
+    
+    # Navigation
+    nav1, nav2 = st.columns(2)
+    if nav1.button("🏠 Home", use_container_width=True): change_folder(ROOT_FOLDER); st.rerun()
+    if nav2.button("⬅️ Up", use_container_width=True):
+        if st.session_state.path != ROOT_FOLDER:
+            change_folder(st.session_state.path.rsplit('/', 1)[0])
             st.rerun()
 
-# --- 7. Main UI ---
+    # Explorer
+    folders, files = fetch_vault_contents(st.session_state.path)
+    
+    st.markdown("<br><p style='font-size:0.7rem; color:#475569; font-weight:700;'>DIRECTORIES</p>", unsafe_allow_html=True)
+    for f in folders:
+        if st.button(f"📁 {f}", key=f"f_{f}", use_container_width=True):
+            change_folder(f"{st.session_state.path}/{f}")
+            st.rerun()
+
+    st.markdown("<br><p style='font-size:0.7rem; color:#475569; font-weight:700;'>ASSETS</p>", unsafe_allow_html=True)
+    for i, f in enumerate(files):
+        is_active = st.session_state.viewer_file and st.session_state.viewer_file['public_id'] == f['public_id']
+        style_class = "active-file" if is_active else ""
+        st.markdown(f'<div class="{style_class}">', unsafe_allow_html=True)
+        if st.button(f"📄 {f['name']}", key=f"file_{i}", use_container_width=True):
+            view_file(f, i)
+            st.rerun()
+        st.markdown('</div>', unsafe_allow_html=True)
+
+# --- 7. Main Content Area ---
 apply_custom_css()
 
-# Breadcrumbs
-parts = st.session_state.path.split('/')
-breadcrumb_text = " • ".join(parts[1:]) if len(parts) > 1 else "Root"
-st.markdown(f'<div class="breadcrumb"><span>Vault</span><span style="opacity:0.4">/</span><span>{breadcrumb_text}</span></div>', unsafe_allow_html=True)
+# Breadcrumb UI
+p_parts = st.session_state.path.split('/')
+b_path = " / ".join(p_parts[1:]) if len(p_parts) > 1 else "Root"
+st.markdown(f'<div class="breadcrumb"><span>Vault</span> <span>/</span> <span>{b_path}</span></div>', unsafe_allow_html=True)
 
 if st.session_state.viewer_file:
     f = st.session_state.viewer_file
     
-    # Close Button
-    col_title, col_close = st.columns([0.85, 0.15])
-    col_title.markdown(f"### {f['display_name']}")
-    if col_close.button("✕ Close", use_container_width=True):
+    # Viewer Header
+    h1, h2 = st.columns([0.8, 0.2])
+    h1.subheader(f['name'])
+    if h2.button("✕ Close Viewer", use_container_width=True):
         st.session_state.viewer_file = None
         st.rerun()
 
-    # --- THE STAGE (Navigation Buttons Centered) ---
-    # Using vertical_alignment="center" to keep arrows in the middle of the image height
-    v_prev, v_main, v_next = st.columns([1, 10, 1], vertical_alignment="center")
+    # --- CENTERING STAGE ---
+    # We use vertical_alignment="center" to keep arrows in the middle regardless of image height
+    v_prev, v_content, v_next = st.columns([1, 12, 1], vertical_alignment="center")
 
     with v_prev:
-        st.markdown('<div class="nav-btn-container">', unsafe_allow_html=True)
-        if st.button("❮", key="main_prev"):
-            new_idx = (st.session_state.viewer_index - 1) % len(files)
-            load_file(files[new_idx], new_idx)
+        st.markdown('<div class="nav-btn">', unsafe_allow_html=True)
+        if st.button("❮", key="prev_btn"):
+            idx = (st.session_state.viewer_index - 1) % len(files)
+            view_file(files[idx], idx)
             st.rerun()
         st.markdown('</div>', unsafe_allow_html=True)
 
-    with v_main:
-        st.markdown('<div class="media-card">', unsafe_allow_html=True)
+    with v_content:
+        st.markdown('<div class="media-container">', unsafe_allow_html=True)
         if f['r_type'] == "image":
-            img_b64 = base64.b64encode(st.session_state.file_bytes).decode()
-            st.markdown(f'<img src="data:image/png;base64,{img_b64}" class="media-preview">', unsafe_allow_html=True)
+            b64 = base64.b64encode(st.session_state.file_bytes).decode()
+            st.markdown(f'<img src="data:image/png;base64,{b64}" class="img-fluid">', unsafe_allow_html=True)
         elif f['r_type'] == "video":
             st.video(f['secure_url'])
-        elif f['display_name'].lower().endswith('.pdf'):
+        elif f['name'].lower().endswith('.pdf'):
             try:
-                doc = fitz.open(stream=st.session_state.file_bytes, filetype="pdf")
-                page = doc.load_page(st.session_state.get('pdf_page', 0))
-                pix = page.get_pixmap(matrix=fitz.Matrix(2, 2))
-                img_data = base64.b64encode(pix.tobytes("png")).decode()
-                st.markdown(f'<img src="data:image/png;base64,{img_data}" class="media-preview">', unsafe_allow_html=True)
-            except: st.info("Preview error")
+                pdf_doc = fitz.open(stream=st.session_state.file_bytes, filetype="pdf")
+                page = pdf_doc.load_page(0) # Preview first page
+                pix = page.get_pixmap(matrix=fitz.Matrix(2,2))
+                pdf_b64 = base64.b64encode(pix.tobytes("png")).decode()
+                st.markdown(f'<img src="data:image/png;base64,{pdf_b64}" class="img-fluid">', unsafe_allow_html=True)
+            except: st.warning("PDF Preview Failed")
         st.markdown('</div>', unsafe_allow_html=True)
 
     with v_next:
-        st.markdown('<div class="nav-btn-container">', unsafe_allow_html=True)
-        if st.button("❯", key="main_next"):
-            new_idx = (st.session_state.viewer_index + 1) % len(files)
-            load_file(files[new_idx], new_idx)
+        st.markdown('<div class="nav-btn">', unsafe_allow_html=True)
+        if st.button("❯", key="next_btn"):
+            idx = (st.session_state.viewer_index + 1) % len(files)
+            view_file(files[idx], idx)
             st.rerun()
         st.markdown('</div>', unsafe_allow_html=True)
 
-    # Download and Delete
+    # --- ACTION BAR ---
     st.markdown("<br>", unsafe_allow_html=True)
-    foot1, foot2, foot3 = st.columns([2, 1, 2])
-    with foot2:
-        st.markdown(f'<a href="{f["secure_url"]}" target="_blank" class="download-link">Download File</a>', unsafe_allow_html=True)
-        if st.session_state.auth:
-            if st.button("🗑️ Delete Asset", use_container_width=True):
+    a1, a2, a3 = st.columns([1, 1, 1])
+    
+    with a1:
+        st.markdown(f'<a href="{f["secure_url"]}" target="_blank" class="action-link" style="width:100%">Download Original</a>', unsafe_allow_html=True)
+    
+    if st.session_state.auth:
+        with a2:
+            with st.popover("✏️ Rename Asset", use_container_width=True):
+                new_n = st.text_input("New Filename", value=f['name'])
+                if st.button("Confirm Rename"):
+                    success, msg = rename_asset(f['public_id'], new_n, f['r_type'])
+                    if success:
+                        st.success("Renamed!")
+                        st.session_state.viewer_file = None
+                        st.rerun()
+                    else: st.error(msg)
+        with a3:
+            if st.button("🗑️ Delete Permanently", use_container_width=True, type="primary"):
                 cloudinary.uploader.destroy(f['public_id'], resource_type=f['r_type'])
                 st.session_state.viewer_file = None
                 st.cache_data.clear()
                 st.rerun()
 
 else:
-    # Empty state / Folder View
-    st.markdown("<div style='height: 10vh;'></div>", unsafe_allow_html=True)
+    # --- FOLDER LANDING VIEW ---
+    st.markdown("<div style='height: 15vh;'></div>", unsafe_allow_html=True)
     st.markdown(f"""
-        <div style="background: rgba(74, 144, 226, 0.05); padding: 60px; border-radius: 20px; border: 1px dashed rgba(74, 144, 226, 0.3); text-align: center;">
-            <h1 style="margin:0; font-weight:800;">Vault Explorer</h1>
-            <p style="opacity:0.6;">Select an asset from the sidebar to begin.</p>
+        <div style='text-align:center; padding: 50px; border: 1px dashed #334155; border-radius: 20px; background: #0f172a;'>
+            <h2 style='color:#3b82f6;'>Vault Explorer Active</h2>
+            <p style='color:#64748b;'>Select an asset from the sidebar to preview or manage files.</p>
+            <code style='color:#94a3b8;'>Path: {st.session_state.path}</code>
         </div>
     """, unsafe_allow_html=True)
-    
+
     if st.session_state.auth:
         st.markdown("<br>", unsafe_allow_html=True)
-        m1, m2 = st.columns(2)
-        with m1:
-            with st.expander("📁 New Folder"):
-                name = st.text_input("Folder Name")
-                if st.button("Create") and name:
-                    cloudinary.api.create_folder(f"{st.session_state.path}/{name}")
+        col_up1, col_up2 = st.columns(2)
+        with col_up1:
+            with st.expander("📤 Upload New Asset"):
+                up = st.file_uploader("Choose file")
+                if st.button("Upload to Cloud") and up:
+                    ext = up.name.split('.')[-1].lower()
+                    rt = "image" if ext in ['jpg','jpeg','png','webp'] else "video" if ext in ['mp4','mov'] else "raw"
+                    cloudinary.uploader.upload(up, folder=st.session_state.path, public_id=up.name.rsplit('.',1)[0] if rt != "raw" else up.name, resource_type=rt)
                     st.cache_data.clear()
                     st.rerun()
-        with m2:
-            with st.expander("📤 Upload Asset"):
-                up = st.file_uploader("File")
-                if st.button("Upload") and up:
-                    ext = up.name.split('.')[-1].lower()
-                    rtype = "image" if ext in ['jpg', 'jpeg', 'png'] else "video" if ext in ['mp4', 'mov'] else "raw"
-                    cloudinary.uploader.upload(up, folder=st.session_state.path, public_id=up.name.rsplit('.', 1)[0] if rtype != "raw" else up.name, resource_type=rtype)
+        with col_up2:
+            with st.expander("📁 Create Sub-Directory"):
+                fn = st.text_input("Directory Name")
+                if st.button("Initialize Folder") and fn:
+                    cloudinary.api.create_folder(f"{st.session_state.path}/{fn}")
                     st.cache_data.clear()
                     st.rerun()
 
-st.markdown(f'<div style="position: fixed; bottom: 10px; right: 20px; font-size: 0.7rem; opacity: 0.3;">Enterprise Media Manager | {datetime.now().year}</div>', unsafe_allow_html=True)
+st.markdown(f'<div style="position: fixed; bottom: 10px; right: 20px; font-size: 0.7rem; color: #475569;">BCH Vault v3.0 | {datetime.now().year}</div>', unsafe_allow_html=True)
