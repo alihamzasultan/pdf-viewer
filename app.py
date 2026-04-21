@@ -30,7 +30,6 @@ def apply_pro_style():
         header { background-color: rgba(0,0,0,0) !important; }
         [data-testid="stSidebar"] { background-color: #0E1117 !important; border-right: 1px solid rgba(255,255,255,0.05); }
         
-        /* Navigation Breadcrumb */
         .breadcrumb-container {
             display: flex; align-items: center; padding: 12px;
             background: rgba(255,255,255,0.03); border: 1px solid rgba(255,255,255,0.08);
@@ -40,14 +39,13 @@ def apply_pro_style():
         .stButton button { border-radius: 8px !important; background-color: #1E2127 !important; border: 1px solid #2D3139 !important; color: #E0E0E0 !important; }
         .stButton button:hover { border-color: #4A90E2 !important; color: #4A90E2 !important; }
         
-        /* --- ENLARGED VIEWPORT FIX --- */
         .viewport-container {
             display: flex; justify-content: center; align-items: center;
-            width: 100%; min-height: 80vh; margin-top: 10px;
+            width: 100%; min-height: 70vh; margin-top: 10px;
         }
         .media-preview {
             max-width: 95% !important; 
-            max-height: 80vh !important;
+            max-height: 75vh !important;
             object-fit: contain !important; border-radius: 12px;
             box-shadow: 0 40px 100px rgba(0,0,0,0.8);
             border: 1px solid rgba(255,255,255,0.1);
@@ -55,7 +53,6 @@ def apply_pro_style():
 
         .sidebar-heading { color: #555; font-size: 0.7rem; font-weight: 800; text-transform: uppercase; letter-spacing: 1.5px; margin: 20px 0 10px 0; }
         
-        /* Download Link Button */
         .custom-download-btn {
             background-color: #1E2127; color: #E0E0E0 !important; 
             border: 1px solid #2D3139; border-radius: 8px; 
@@ -65,6 +62,9 @@ def apply_pro_style():
             transition: all 0.2s ease;
         }
         .custom-download-btn:hover { border-color: #4A90E2; color: #4A90E2 !important; }
+        
+        /* Global Nav Style */
+        .nav-text { color: #888; font-size: 12px; text-align: center; margin-top: 5px; }
         </style>
     """, unsafe_allow_html=True)
 
@@ -72,18 +72,15 @@ def apply_pro_style():
 
 def get_items_in_path(path):
     folders, files = set(), []
-    # Pull physical folders from Cloudinary
     try:
         sub_folders_res = cloudinary.api.subfolders(path)
         for f in sub_folders_res.get('folders', []): folders.add(f['name'])
     except: pass
     
-    # Pull files from Cloudinary
     try:
         for rt in ['image', 'video', 'raw']:
             res = cloudinary.api.resources(resource_type=rt, type="upload", prefix=path + "/", max_results=100)
             for item in res.get('resources', []):
-                # Ensure the file is strictly in this folder level
                 if item['public_id'].rsplit('/', 1)[0] == path:
                     item['r_type'] = rt
                     item['display_name'] = item['public_id'].split('/')[-1]
@@ -101,6 +98,19 @@ def get_file_icon(name, r_type):
     if r_type == 'video': return "🎬" 
     return "📄"
 
+def load_file_at_index(idx):
+    """Loads file data into session state based on index in current folder."""
+    if 0 <= idx < len(st.session_state.files_in_folder):
+        file_info = st.session_state.files_in_folder[idx]
+        with st.spinner(f"Opening {file_info['display_name']}..."):
+            resp = requests.get(file_info['secure_url'])
+            st.session_state.file_data = resp.content
+            st.session_state.current_filename = file_info['public_id']
+            st.session_state.current_type = file_info['r_type']
+            st.session_state.current_url = file_info['secure_url']
+            st.session_state.file_index = idx
+            st.session_state.page_num = 0
+
 # --- 4. State Management ---
 if "authenticated" not in st.session_state: st.session_state.authenticated = False
 if "current_path" not in st.session_state: st.session_state.current_path = ROOT_FOLDER
@@ -109,6 +119,8 @@ if "current_filename" not in st.session_state: st.session_state.current_filename
 if "current_type" not in st.session_state: st.session_state.current_type = ""
 if "current_url" not in st.session_state: st.session_state.current_url = ""
 if "page_num" not in st.session_state: st.session_state.page_num = 0
+if "file_index" not in st.session_state: st.session_state.file_index = -1
+if "files_in_folder" not in st.session_state: st.session_state.files_in_folder = []
 
 # --- 5. Sidebar UI ---
 with st.sidebar:
@@ -120,7 +132,6 @@ with st.sidebar:
             st.rerun()
         else: st.error("Access Denied")
 
-    # Location Navigation
     st.markdown('<p class="sidebar-heading">Location</p>', unsafe_allow_html=True)
     parts = st.session_state.current_path.split('/')
     friendly = "Home" if len(parts) == 1 else "Home > " + " > ".join(parts[1:])
@@ -141,6 +152,7 @@ with st.sidebar:
 
     st.markdown('<p class="sidebar-heading">Explorer</p>', unsafe_allow_html=True)
     folders, files = get_items_in_path(st.session_state.current_path)
+    st.session_state.files_in_folder = files # Sync files for navigation
 
     # Render Folders
     for f in folders:
@@ -161,21 +173,15 @@ with st.sidebar:
                     except: pass
 
     # Render Files
-    for f in files:
+    for idx, f in enumerate(files):
         pid, name = f['public_id'], f['display_name']
         cf, df = st.columns([4, 1])
         icon = get_file_icon(name, f['r_type'])
         
         with cf:
             if st.button(f"{icon} {name}", key=f"file_{pid}", use_container_width=True):
-                with st.spinner("Loading..."):
-                    resp = requests.get(f['secure_url'])
-                    st.session_state.file_data = resp.content
-                    st.session_state.current_filename = pid
-                    st.session_state.current_type = f['r_type']
-                    st.session_state.current_url = f['secure_url']
-                    st.session_state.page_num = 0
-                    st.rerun()
+                load_file_at_index(idx)
+                st.rerun()
         with df:
             if st.session_state.authenticated:
                 if st.button("🗑️", key=f"del_file_{pid}"):
@@ -185,50 +191,76 @@ with st.sidebar:
 
 # --- 6. Main Area ---
 apply_pro_style()
-
-# CASE 1: PREVIEW MODE
 if st.session_state.file_data:
     clean_n = st.session_state.current_filename.split('/')[-1]
     st.markdown(f"<div style='text-align:center; color:#555; letter-spacing:5px; font-size:11px; margin: 15px 0;'>{clean_n.upper()}</div>", unsafe_allow_html=True)
 
+    # --- 1. MEDIA DISPLAY LOGIC ---
     if st.session_state.current_type == "raw": # PDF
-        doc = fitz.open(stream=st.session_state.file_data, filetype="pdf")
-        total_p = len(doc)
-        page = doc.load_page(st.session_state.page_num)
-        pix = page.get_pixmap(matrix=fitz.Matrix(2.0, 2.0))
-        img_b64 = base64.b64encode(pix.tobytes("png")).decode()
-        
-        n1, main, n2 = st.columns([1, 8, 1], vertical_alignment="center")
-        with n1:
-            if st.button("〈", key="prev_p") and st.session_state.page_num > 0:
-                st.session_state.page_num -= 1
-                st.rerun()
-        with main:
-            st.markdown(f'<div class="viewport-container"><img src="data:image/png;base64,{img_b64}" class="media-preview"></div>', unsafe_allow_html=True)
-            st.markdown(f"<div style='text-align:center; color:#444; font-size:12px; margin-top:10px;'>{st.session_state.page_num+1} / {total_p}</div>", unsafe_allow_html=True)
-        with n2:
-            if st.button("〉", key="next_p") and st.session_state.page_num < total_p - 1:
-                st.session_state.page_num += 1
-                st.rerun()
+        try:
+            doc = fitz.open(stream=st.session_state.file_data, filetype="pdf")
+            total_p = len(doc)
+            page = doc.load_page(st.session_state.page_num)
+            pix = page.get_pixmap(matrix=fitz.Matrix(2.0, 2.0))
+            img_b64 = base64.b64encode(pix.tobytes("png")).decode()
+            
+            p1, pmain, p2 = st.columns([1, 8, 1], vertical_alignment="center")
+            with p1:
+                if st.button("❮", key="page_prev") and st.session_state.page_num > 0:
+                    st.session_state.page_num -= 1
+                    st.rerun()
+            with pmain:
+                st.markdown(f'<div class="viewport-container"><img src="data:image/png;base64,{img_b64}" class="media-preview"></div>', unsafe_allow_html=True)
+                st.markdown(f"<div style='text-align:center; color:#444; font-size:12px; margin-top:10px;'>Page {st.session_state.page_num+1} / {total_p}</div>", unsafe_allow_html=True)
+            with p2:
+                if st.button("❯", key="page_next") and st.session_state.page_num < total_p - 1:
+                    st.session_state.page_num += 1
+                    st.rerun()
+        except:
+            st.warning("Preview not available for this file type.")
     
     elif st.session_state.current_type == "image":
         img_b64 = base64.b64encode(st.session_state.file_data).decode()
         st.markdown(f'<div class="viewport-container"><img src="data:image/image;base64,{img_b64}" class="media-preview"></div>', unsafe_allow_html=True)
     
     elif st.session_state.current_type == "video":
-        st.markdown(f'<div class="viewport-container"><video controls class="media-preview"><source src="{st.session_state.current_url}"></video></div>', unsafe_allow_html=True)
+        st.markdown(f'<div class="viewport-container"><video controls class="media-preview" autoplay><source src="{st.session_state.current_url}"></video></div>', unsafe_allow_html=True)
 
+    # --- 2. MULTI-BUTTON ACTION BAR (The part you requested) ---
     st.markdown("<br>", unsafe_allow_html=True)
-    _, d_col, c_col, _ = st.columns([5, 2, 2, 5])
-    with d_col:
+    
+    # Create 4 columns for the 4 buttons (Prev, Download, Close, Next)
+    # The [3, 2, 2, 2, 2, 3] ratio centers the 4 buttons in the middle
+    _, col_prev, col_down, col_close, col_next, _ = st.columns([3, 2, 2, 2, 2, 3])
+
+    with col_prev:
+        if st.button("← Previous", use_container_width=True):
+            if len(st.session_state.files_in_folder) > 0:
+                new_idx = (st.session_state.file_index - 1) % len(st.session_state.files_in_folder)
+                load_file_at_index(new_idx)
+                st.rerun()
+
+    with col_down:
         st.markdown(f'<a href="{st.session_state.current_url}" target="_blank" class="custom-download-btn">Download</a>', unsafe_allow_html=True)
-    with c_col:
-        if st.button("Close", use_container_width=True):
+
+    with col_close:
+        if st.button("Close Preview", use_container_width=True):
             st.session_state.file_data = None
             st.rerun()
 
-# CASE 2: WELCOME & FOLDER MANAGEMENT MODE
+    with col_next:
+        if st.button("Next →", use_container_width=True):
+            if len(st.session_state.files_in_folder) > 0:
+                new_idx = (st.session_state.file_index + 1) % len(st.session_state.files_in_folder)
+                load_file_at_index(new_idx)
+                st.rerun()
+
+    # Optional: File counter text below buttons
+    st.markdown(f"<div style='text-align:center; color:#444; font-size:11px; margin-top:10px;'>File {st.session_state.file_index + 1} of {len(st.session_state.files_in_folder)}</div>", unsafe_allow_html=True)
+
+
 else:
+    # --- FOLDER MANAGEMENT MODE ---
     st.markdown("<div style='height: 10vh;'></div>", unsafe_allow_html=True)
     _, mid, _ = st.columns([1, 2, 1])
     with mid:
@@ -236,7 +268,6 @@ else:
         st.markdown(f'<div style="background: rgba(74, 144, 226, 0.05); border: 1px solid rgba(74, 144, 226, 0.2); color: #4A90E2; padding: 30px; border-radius: 12px; text-align: center; margin-bottom: 30px;">📂 Currently in <b>{curr_name}</b></div>', unsafe_allow_html=True)
         
         if st.session_state.authenticated:
-            # 1. Folder Creation
             with st.expander("📁 Create New Sub-folder"):
                 nf = st.text_input("Folder Name")
                 if st.button("Create Folder", use_container_width=True) and nf:
@@ -245,19 +276,15 @@ else:
                     st.session_state.current_path = new_p
                     st.rerun()
 
-            # 2. Media Upload
             with st.expander("📤 Upload New Media"):
                 un = st.text_input("File Display Name")
-                uf = st.file_uploader("Choose File", type=["pdf", "png", "jpg", "mp4"])
+                uf = st.file_uploader("Choose File", type=["pdf", "png", "jpg", "mp4", "docx", "xlsx"])
                 if st.button("Start Upload", use_container_width=True) and uf and un:
                     with st.spinner("Processing..."):
                         file_ext = uf.name.split('.')[-1].lower()
                         r_type = "image" if file_ext in ['jpg', 'jpeg', 'png', 'webp'] else "video" if file_ext in ['mp4', 'mov'] else "raw"
-                        # Force extension for PDF/Raw files
                         clean_id = f"{un}.{file_ext}" if r_type == "raw" else un
-                        
                         cloudinary.uploader.upload(uf.read(), folder=st.session_state.current_path, public_id=clean_id, resource_type=r_type, overwrite=True)
-                        st.success(f"Uploaded: {clean_id}")
                         st.rerun()
         else:
             st.info("🔐 Unlock admin mode in the sidebar to create folders or upload files.")
