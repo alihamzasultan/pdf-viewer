@@ -32,26 +32,28 @@ def apply_custom_css():
         <style>
         @import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap');
     /* FORCE sidebar buttons LEFT aligned */
-[data-testid="stSidebar"] .stButton > button {
+/* FORCE EVERYTHING LEFT inside sidebar buttons */
+[data-testid="stSidebar"] button {
     display: flex !important;
     justify-content: flex-start !important;
     align-items: center !important;
     text-align: left !important;
     width: 100% !important;
-    padding: 10px 12px !important;
     padding-left: 18px !important;
-    gap: 8px !important;
-
-    background: transparent !important;
-    border: 1px solid transparent !important;
-    color: #94a3b8 !important;
+    gap: 10px !important;
 }
 
-/* Hover */
-[data-testid="stSidebar"] .stButton > button:hover {
-    background: #1e293b !important;
-    color: #3b82f6 !important;
-    border-color: rgba(59, 130, 246, 0.3) !important;
+/* Target inner text wrapper (THIS is the key fix) */
+[data-testid="stSidebar"] button div {
+    justify-content: flex-start !important;
+    text-align: left !important;
+    width: 100% !important;
+}
+
+/* Remove center alignment from Streamlit default */
+[data-testid="stSidebar"] button p {
+    text-align: left !important;
+    margin: 0 !important;
 }
 
         /* Keep the MAIN PAGE navigation arrows centered */
