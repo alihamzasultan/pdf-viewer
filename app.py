@@ -32,6 +32,39 @@ st.set_page_config(
 def apply_custom_css():
     st.markdown("""
         <style>
+                @import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;600;800&display=swap');
+        
+        /* Global Reset */
+        html, body, [class*="css"] { font-family: 'Inter', sans-serif; color: #E0E0E2; }
+        .stApp { background: radial-gradient(circle at top right, #1a1c23, #080a0c); }
+        
+        /* --- STICKY SIDEBAR FIXES --- */
+        /* 1. Make the native sidebar collapse button sticky */
+        [data-testid="stSidebar"] [data-testid="stSidebarHeader"] {
+            position: sticky;
+            top: 0;
+            z-index: 1000;
+            background-color: #0f1116 !important; /* Match your sidebar background */
+            padding-bottom: 10px;
+        }
+
+        /* 2. Optional: If you want the 'BCH VAULT' title to also stay sticky */
+        [data-testid="stSidebarContent"] {
+            display: flex;
+            flex-direction: column;
+        }
+
+        /* Ensure sidebar content scrolls below the header */
+        [data-testid="stSidebarContent"] [data-testid="stVerticalBlock"] {
+            gap: 0rem;
+        }
+        
+        /* Sidebar Styling */
+        [data-testid="stSidebar"] {
+            background-color: rgba(15, 17, 22, 0.95) !important;
+            border-right: 1px solid rgba(255,255,255,0.05);
+            backdrop-filter: blur(10px);
+        }
         @import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;600;800&display=swap');
         
         /* Global Reset */
